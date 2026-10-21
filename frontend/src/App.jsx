@@ -669,7 +669,9 @@ function QuizPanel({ quiz, answers, setAnswers, submitted, setSubmitted, onResta
  * @param {function} props.onShuffle - Randomize the card order.
  */
 function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle }) {
-  if (!deck?.cards?.length) {
+  const cardList = Array.isArray(deck?.cards) ? deck.cards : (Array.isArray(deck?.flashcards) ? deck.flashcards : [])
+
+  if (!cardList.length) {
     return (
       <EmptyMaterial
         icon={Layers3}
@@ -679,9 +681,10 @@ function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle 
     )
   }
 
-  const card = deck.cards[index]
+  const safeIndex = Math.min(Math.max(0, index), cardList.length - 1)
+  const card = cardList[safeIndex] || cardList[0]
   const move = (direction) => {
-    setIndex((index + direction + deck.cards.length) % deck.cards.length)
+    setIndex((safeIndex + direction + cardList.length) % cardList.length)
     setFlipped(false)
   }
 
@@ -714,10 +717,10 @@ function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle 
       <div className="card-controls">
         <button className="circle-control" onClick={() => move(-1)} title="Previous card"><ChevronLeft size={20} /></button>
         <div className="card-progress">
-          <b>{String(index + 1).padStart(2, '0')}</b>
-          <span> / {String(deck.cards.length).padStart(2, '0')}</span>
+          <b>{String(safeIndex + 1).padStart(2, '0')}</b>
+          <span> / {String(cardList.length).padStart(2, '0')}</span>
           <div className="progress-track">
-            <span style={{ width: `${((index + 1) / deck.cards.length) * 100}%` }} />
+            <span style={{ width: `${((safeIndex + 1) / cardList.length) * 100}%` }} />
           </div>
         </div>
         <button className="circle-control" onClick={() => move(1)} title="Next card"><ChevronRight size={20} /></button>
