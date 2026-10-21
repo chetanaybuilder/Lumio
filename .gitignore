@@ -1,0 +1,32 @@
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pip-cache/
+.tmp/
+.wrangler/
+
+# Generated study data
+backend/temp/*
+!backend/temp/.gitkeep
+backend/.chroma/
+backend/chroma_db/
+*.pdf
+*.log
+
+# Frontend build and dependencies
+frontend/node_modules/
+frontend/dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Short-lived local study data stays out of source control.
