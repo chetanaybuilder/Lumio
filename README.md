@@ -1,10 +1,10 @@
 <div align="center">
 
 # 🌟 Lumio
-### Intelligent, Grounded Textbook Study Workspace Powered by Google Gemini & Cloudflare
+### Intelligent, Grounded Textbook Study Workspace Powered by Groq & Cloudflare
 
 [![Live App](https://img.shields.io/badge/Live%20Demo-lumio--study.pages.dev-10b981?style=for-the-badge&logo=cloudflare&logoColor=white)](https://lumio-study.pages.dev)
-[![Google Gemini](https://img.shields.io/badge/AI-Gemini%203.8%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Groq AI](https://img.shields.io/badge/AI-Groq%20LPU%20(Sub--5s)-f55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com)
 [![Cloudflare](https://img.shields.io/badge/Deployed%20on-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://vitejs.dev)
@@ -18,7 +18,7 @@
 
 <br/><br/>
 
-**Transform any textbook PDF into structured, sourced study notes, interactive practice quizzes, active-recall flashcards, and an evidence-grounded AI chat with exact page citations.**
+**Transform any textbook PDF into structured, sourced study notes, interactive practice quizzes, active-recall flashcards, and an evidence-grounded AI chat with exact page citations in under 5 seconds.**
 
 [🌐 Explore Live Application](https://lumio-study.pages.dev) • [📖 Architecture](ARCHITECTURE.md) • [🚀 Quick Start](#-quick-start) • [⚡ Cloudflare Deployment](#-deployment-to-cloudflare)
 
@@ -35,6 +35,7 @@
 | **🧪 Interactive Quizzes** | Multiple choice, true/false, and short answer practice problems complete with detailed explanations and difficulty levels. |
 | **🗂️ Active Recall Flashcards** | Front-and-back study cards formatted for active recall and spaced repetition. |
 | **💬 Ask Lumio (Contextual Q&A)** | Ask questions directly against your textbook. Every answer is strictly grounded in the document and cites exact source pages. |
+| **⚡ Sub-5-Second Inference** | Powered by Groq LPUs (`openai/gpt-oss-20b`), generating complete study outputs in 1–3 seconds. |
 | **📄 Styled PDF Export** | Download generated notes, quiz sheets, or flashcard decks as beautifully formatted, ready-to-print PDFs. |
 | **🔒 Ephemeral & Private** | Zero login required. Each tab receives an isolated, temporary session that self-cleans after inactivity. |
 
@@ -47,14 +48,14 @@ graph TD
     A[Textbook PDF Upload] --> B[PDF Extractor]
     B --> C[Text Normalization & Structure Detector]
     C --> D[Context Chunker & Heading Mapper]
-    D --> E[Gemini 768d Embedding Generator]
+    D --> E[Fast Deterministic Feature Vectorizer]
     E --> F[In-Memory Scoped Vector Store]
     
     F --> G[Ask Lumio: Cosine Retrieval]
     D --> H[Study Prompt Assembler]
     
-    G --> I[Gemini 3.8 Flash Engine]
-    H --> I[Gemini 3.8 Flash Engine]
+    G --> I[Groq LPU Engine: openai/gpt-oss-20b]
+    H --> I[Groq LPU Engine: openai/gpt-oss-20b]
     
     I --> J[Type-Safe Pydantic Output Validation]
     J --> K[Source Page Verification Filter]
@@ -67,11 +68,11 @@ graph TD
 - Text is extracted, normalized, and partitioned into semantically coherent chunks mapped to exact page numbers.
 
 ### 2. Grounded Vector Retrieval
-- Text chunks are indexed using Google's `gemini-embedding-001` (768 dimensions).
-- Search queries retrieve nearest-neighbor excerpts using cosine similarity with relevance threshold gating.
+- Text chunks are indexed locally using high-speed normalized n-gram feature hashing vectors (256 dimensions).
+- Search queries retrieve nearest-neighbor excerpts using cosine similarity with zero external API latency.
 
-### 3. Structured Generation & Page Verification
-- Every artifact (Notes, Quizzes, Flashcards, Chat) is generated using `gemini-3.8-flash` with strict JSON schema validation.
+### 3. Sub-Second Structured Generation & Page Verification
+- Every artifact (Notes, Quizzes, Flashcards, Chat) is generated using Groq (`openai/gpt-oss-20b`) with strict JSON schema validation.
 - An automated post-processor inspects all citations, stripping any hallucinated or out-of-range page numbers.
 
 ### 4. Zero-Container Edge Deployment
@@ -85,7 +86,7 @@ graph TD
 ### Prerequisites
 - **Python 3.11+**
 - **Node.js 20+** and **npm**
-- **Google Gemini API Key** ([Get one for free at Google AI Studio](https://aistudio.google.com/))
+- **Groq API Key** ([Get one for free at console.groq.com](https://console.groq.com/keys))
 
 ---
 
@@ -109,10 +110,10 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `backend/.env` and insert your Gemini API Key:
+Edit `backend/.env` and insert your Groq API Key:
 ```env
-GEMINI_API_KEY=your_actual_gemini_api_key_here
-GEMINI_MODEL=gemini-3.8-flash
+GROQ_API_KEY=your_actual_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-20b
 SESSION_TTL_SECONDS=3600
 MAX_UPLOAD_MB=20
 MAX_PDF_PAGES=500
@@ -139,7 +140,7 @@ Open your browser to `http://localhost:5173`. The Vite dev server will proxy `/a
 
 ## 🧪 Running Automated Tests
 
-Lumio includes comprehensive integration and workflow test suites verifying session isolation, PDF parsing, Gemini structured output validation, and PDF export:
+Lumio includes comprehensive integration and workflow test suites verifying session isolation, PDF parsing, Groq structured output validation, and PDF export:
 
 ```bash
 cd backend
@@ -197,7 +198,7 @@ All requests must include the `X-Session-Token` header obtained from `POST /api/
 | `POST` | `/api/study/deep-notes` | Generate comprehensive section-by-section notes |
 | `POST` | `/api/study/quick-notes` | Generate high-density bulleted revision notes |
 | `POST` | `/api/study/quiz` | Generate interactive quiz with answer explanations |
-| `POST` | `/api/study/flashcards` | Generate front/back flashcard deck |
+| `POST` | `/api/study/flashcards` | Generate front-and-back flashcard deck |
 | `POST` | `/api/chat` | Ask Lumio textbook-grounded Q&A with citations |
 | `POST` | `/api/export/pdf` | Export generated material as a styled PDF document |
 

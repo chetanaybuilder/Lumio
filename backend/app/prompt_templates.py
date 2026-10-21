@@ -2,7 +2,7 @@
 Prompt Templates — Lumio Backend
 ==================================
 
-Constructs the final prompt strings sent to the Gemini text-generation
+Constructs the final prompt strings sent to the Groq text-generation
 model.  Every prompt follows a deliberate safety pattern:
 
 1. **Role framing** — the model is told to act as a study-material

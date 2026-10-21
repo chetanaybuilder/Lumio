@@ -18,8 +18,7 @@ import pytest
 
 # Ensure required native libraries are available before importing the app.
 pytest.importorskip("pymupdf")
-pytest.importorskip("google.genai")
-pytest.importorskip("chromadb")
+pytest.importorskip("groq")
 
 from app.main import app, require_session
 from app.session_manager import StudySession

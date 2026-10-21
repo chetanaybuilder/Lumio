@@ -26,7 +26,7 @@ clear_all_chunks: Purge the entire store (used at backend startup).
 import math
 import threading
 
-from app.gemini_client import EMBEDDING_DIMENSIONS
+from app.groq_client import EMBEDDING_DIMENSIONS
 
 
 # ---------------------------------------------------------------------------

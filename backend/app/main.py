@@ -17,8 +17,8 @@ cleanup task is gracefully cancelled.
 
 Concurrency
 -----------
-A semaphore (``generation_slots``) limits the number of concurrent Gemini
-generation calls to 2 to avoid overwhelming the provider's free-tier
+A semaphore (``generation_slots``) limits the number of concurrent Groq
+generation calls to 4 to avoid overwhelming the provider's free-tier
 rate limits.
 
 Session security
@@ -43,7 +43,7 @@ from app.chunker import create_chunks
 from app.config import FRONTEND_ORIGINS, MAX_UPLOAD_BYTES, SESSION_TTL_SECONDS, TEMP_DIR
 from app.embedding_generator import generate_embeddings, generate_embedding
 from app.export_service import make_pdf
-from app.gemini_client import generate_structured
+from app.groq_client import generate_structured
 from app.pdf_extractor import PDFPageLimitError, extract_text_from_pdf
 from app.prompt_templates import chat_prompt, study_prompt
 from app.schemas import (
@@ -595,7 +595,7 @@ async def ask_lumio(request: ChatRequest, session: StudySession = Depends(requir
         logger.exception("Textbook question answering failed")
         raise HTTPException(
             status_code=503,
-            detail="Ask Lumio is temporarily unavailable. Check Gemini configuration and retry.",
+            detail="Ask Lumio is temporarily unavailable. Check Groq configuration and retry.",
         ) from error
 
 
@@ -632,8 +632,11 @@ async def export_pdf(request: ExportRequest, session: StudySession = Depends(req
 
 # Session ownership is enforced before every document operation.
 
+# Cloudflare Python Workers entrypoint (only available in Cloudflare Pyodide runtime)
 try:
-    from workers import asgi
+    import importlib
+    asgi = importlib.import_module("workers.asgi")
     default = asgi.entrypoint(app)
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     default = None
+

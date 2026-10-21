@@ -11,7 +11,7 @@ Integration tests that exercise the full user journey:
 5. Export each material type as a PDF.
 6. Delete documents and sessions.
 
-All Gemini calls are stubbed with deterministic fixtures so the tests
+All Groq calls are stubbed with deterministic fixtures so the tests
 run without a live API key.  PDF files are synthesized via PyMuPDF with
 realistic educational content to exercise the extraction + chunking
 pipeline on real document structure.

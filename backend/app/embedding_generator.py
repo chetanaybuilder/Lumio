@@ -16,7 +16,7 @@ Two Gemini task types control how vectors are optimized:
   nearest-neighbor search against stored chunks.
 """
 
-from app.gemini_client import EMBEDDING_DIMENSIONS, embed_texts
+from app.groq_client import EMBEDDING_DIMENSIONS, embed_texts
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list
     try:
         return embed_texts([text], task_type)[0]
     except Exception as error:
-        raise RuntimeError("Failed to generate embedding. Check Gemini availability and configuration.") from error
+        raise RuntimeError("Failed to generate embedding.") from error
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +81,12 @@ def generate_embeddings(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT")
     texts : list[str]
         A list of non-empty text strings to embed.
     task_type : str, optional
-        Gemini task type (default ``RETRIEVAL_DOCUMENT``).
+        Task type (default ``RETRIEVAL_DOCUMENT``).
 
     Returns
     -------
     list[list[float]]
-        One 768-dimensional vector per input text.
+        One vector per input text.
 
     Raises
     ------
@@ -95,7 +95,7 @@ def generate_embeddings(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT")
     ValueError
         If any text in the list is empty or whitespace-only.
     RuntimeError
-        If the Gemini provider call fails.
+        If embedding generation fails.
     """
     if not isinstance(texts, list):
         raise TypeError("Texts must be provided as a list")
@@ -111,13 +111,13 @@ def generate_embeddings(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT")
             raise ValueError("Texts cannot contain empty strings")
 
     try:
-        # Split the request into batches to respect provider size limits.
+        # Split the request into batches to respect size limits.
         embeddings = []
         for start in range(0, len(texts), BATCH_SIZE):
             embeddings.extend(embed_texts(texts[start:start + BATCH_SIZE], task_type))
         return embeddings
     except Exception as error:
-        raise RuntimeError("Failed to generate embeddings. Check Gemini availability and configuration.") from error
+        raise RuntimeError("Failed to generate embeddings.") from error
 
 
 # Document and query vectors share model dimensions but use distinct task types.

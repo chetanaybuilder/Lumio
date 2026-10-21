@@ -1,12 +1,12 @@
-// Cloudflare Pages Advanced Worker: Handles /api/* on Cloudflare Edge
+// Cloudflare Pages Advanced Worker: Handles /api/* on Cloudflare Edge using Groq
 
-const GEMINI_MODEL = "gemini-3.8-flash";
+const GROQ_MODEL = "openai/gpt-oss-20b";
 
 const memorySessions = new Map();
 const memoryDocuments = new Map();
 
 function getApiKey(env) {
-  return env?.GEMINI_API_KEY || "";
+  return env?.GROQ_API_KEY || "";
 }
 
 function jsonResponse(data, status = 200) {
@@ -23,6 +23,70 @@ function jsonResponse(data, status = 200) {
 
 function errorResponse(detail, status = 500) {
   return jsonResponse({ detail }, status);
+}
+
+async function getDoc(env, docId) {
+  if (memoryDocuments.has(docId)) return memoryDocuments.get(docId);
+  if (env?.LUMIO_STORAGE) {
+    try {
+      const raw = await env.LUMIO_STORAGE.get("doc:" + docId);
+      if (raw) {
+        const data = JSON.parse(raw);
+        memoryDocuments.set(docId, data);
+        return data;
+      }
+    } catch (_) {}
+  }
+  try {
+    const cache = caches.default;
+    const res = await cache.match(new Request(`https://lumio-internal/doc/${docId}`));
+    if (res) {
+      const data = await res.json();
+      memoryDocuments.set(docId, data);
+      return data;
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function saveDoc(env, docId, docData) {
+  memoryDocuments.set(docId, docData);
+  if (env?.LUMIO_STORAGE) {
+    try {
+      await env.LUMIO_STORAGE.put("doc:" + docId, JSON.stringify(docData), { expirationTtl: 86400 });
+    } catch (_) {}
+  }
+  try {
+    const cache = caches.default;
+    await cache.put(
+      new Request(`https://lumio-internal/doc/${docId}`),
+      new Response(JSON.stringify(docData), { headers: { "Cache-Control": "max-age=86400" } })
+    );
+  } catch (_) {}
+}
+
+async function getSession(env, token) {
+  if (memorySessions.has(token)) return memorySessions.get(token);
+  if (env?.LUMIO_STORAGE) {
+    try {
+      const raw = await env.LUMIO_STORAGE.get("session:" + token);
+      if (raw) {
+        const data = JSON.parse(raw);
+        memorySessions.set(token, data);
+        return data;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function saveSession(env, token, data) {
+  memorySessions.set(token, data);
+  if (env?.LUMIO_STORAGE) {
+    try {
+      await env.LUMIO_STORAGE.put("session:" + token, JSON.stringify(data), { expirationTtl: 86400 });
+    } catch (_) {}
+  }
 }
 
 async function extractTextFromPdfBytes(arrayBuffer) {
@@ -62,16 +126,22 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   return { text: extractedText.trim(), pageCount };
 }
 
-async function callGemini(apiKey, prompt, schema) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+// Ultra-fast Groq LLM inference with strict JSON schema compliance
+async function callGroq(apiKey, prompt, schema) {
+  const url = "https://api.groq.com/openai/v1/chat/completions";
+
+  const schemaStr = typeof schema === "object" ? JSON.stringify(schema, null, 2) : String(schema);
+  const systemPrompt = `You are an expert educational AI assistant. You MUST return ONLY a valid, well-formed JSON object strictly conforming to this schema:\n${schemaStr}\n\nDo NOT include markdown fences (no \`\`\`json) or any conversational text outside the JSON.`;
 
   const body = {
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json",
-      responseSchema: schema,
-    },
+    model: GROQ_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.2,
+    max_tokens: 4096,
   };
 
   let lastError = null;
@@ -79,22 +149,28 @@ async function callGemini(apiKey, prompt, schema) {
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
         body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`Gemini API returned ${res.status}: ${errText}`);
+        throw new Error(`Groq API returned ${res.status}: ${errText}`);
       }
 
       const data = await res.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) throw new Error("Empty response from Gemini");
+      let rawText = data?.choices?.[0]?.message?.content;
+      if (!rawText) throw new Error("Empty response from Groq");
+
+      // Clean any markdown fences
+      rawText = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
       return JSON.parse(rawText);
     } catch (err) {
       lastError = err;
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
     }
   }
   throw lastError;
@@ -121,17 +197,22 @@ async function handleApiRequest(request, env) {
 
   try {
     if (path === "/health" || path === "/api/health") {
-      return jsonResponse({ status: "healthy", app: "Lumio (Cloudflare Edge)" });
+      return jsonResponse({ status: "healthy", app: "Lumio (Cloudflare Edge with Groq)" });
     }
 
     if (path === "/api/sessions" && method === "POST") {
       const token = crypto.randomUUID().replace(/-/g, "");
-      memorySessions.set(token, { createdAt: Date.now(), documents: new Set() });
+      await saveSession(env, token, { createdAt: Date.now(), documents: [] });
       return jsonResponse({ session_token: token, expires_in: 3600 }, 201);
     }
 
     if (path === "/api/sessions/current" && method === "DELETE") {
-      if (sessionToken) memorySessions.delete(sessionToken);
+      if (sessionToken) {
+        memorySessions.delete(sessionToken);
+        if (env?.LUMIO_STORAGE) {
+          try { await env.LUMIO_STORAGE.delete("session:" + sessionToken); } catch (_) {}
+        }
+      }
       return new Response(null, { status: 204 });
     }
 
@@ -164,7 +245,7 @@ async function handleApiRequest(request, env) {
         chat: [],
       };
 
-      memoryDocuments.set(docId, docData);
+      await saveDoc(env, docId, docData);
 
       return jsonResponse(
         {
@@ -181,7 +262,7 @@ async function handleApiRequest(request, env) {
 
     if (path.startsWith("/api/documents/") && method === "GET") {
       const docId = decodeURIComponent(path.replace("/api/documents/", ""));
-      const doc = memoryDocuments.get(docId);
+      const doc = await getDoc(env, docId);
       if (!doc) return errorResponse("Document not found", 404);
       return jsonResponse({
         document_id: doc.document_id,
@@ -195,7 +276,7 @@ async function handleApiRequest(request, env) {
 
     if (path === "/api/study/deep-notes" || path === "/api/study/quick-notes") {
       const body = await request.json();
-      const doc = memoryDocuments.get(body.document_id);
+      const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
       const isQuick = path.includes("quick-notes");
@@ -228,14 +309,15 @@ Organize into clear sections with heading, detailed content, and source_pages (e
         required: ["title", "sections"],
       };
 
-      const result = await callGemini(apiKey, prompt, schema);
+      const result = await callGroq(apiKey, prompt, schema);
       doc.materials[kind] = result;
+      await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
     }
 
     if (path === "/api/study/quiz" && method === "POST") {
       const body = await request.json();
-      const doc = memoryDocuments.get(body.document_id);
+      const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
       const count = body.count || 5;
@@ -268,14 +350,15 @@ ${doc.text.slice(0, 15000)}`;
         required: ["title", "questions"],
       };
 
-      const result = await callGemini(apiKey, prompt, schema);
+      const result = await callGroq(apiKey, prompt, schema);
       doc.materials["quiz"] = result;
+      await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
     }
 
     if (path === "/api/study/flashcards" && method === "POST") {
       const body = await request.json();
-      const doc = memoryDocuments.get(body.document_id);
+      const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
       const prompt = `Generate focused study flashcards with front (question) and back (answer) based on this textbook:
@@ -303,14 +386,15 @@ ${doc.text.slice(0, 15000)}`;
         required: ["title", "cards"],
       };
 
-      const result = await callGemini(apiKey, prompt, schema);
+      const result = await callGroq(apiKey, prompt, schema);
       doc.materials["flashcards"] = result;
+      await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
     }
 
     if (path === "/api/chat" && method === "POST") {
       const body = await request.json();
-      const doc = memoryDocuments.get(body.document_id);
+      const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
       const question = body.question;
@@ -329,13 +413,13 @@ ${doc.text.slice(0, 15000)}`;
         required: ["answer"],
       };
 
-      const result = await callGemini(apiKey, prompt, schema);
+      const result = await callGroq(apiKey, prompt, schema);
       return jsonResponse(result);
     }
 
     if (path === "/api/export/pdf" && method === "POST") {
       const body = await request.json();
-      const doc = memoryDocuments.get(body.document_id);
+      const doc = await getDoc(env, body.document_id);
       const material = doc?.materials?.[body.kind];
 
       const title = material?.title || `Lumio ${body.kind}`;
@@ -399,9 +483,9 @@ ${350 + streamText.length}
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith('/api/') || url.pathname === '/health') {
+    if (url.pathname.startsWith("/api/") || url.pathname === "/health") {
       return handleApiRequest(request, env);
     }
     return env.ASSETS.fetch(request);
-  }
+  },
 };

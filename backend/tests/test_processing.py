@@ -3,7 +3,7 @@ Processing Tests — Lumio Backend
 ==================================
 
 Deterministic unit tests for the text-processing pipeline.  These tests
-run entirely offline — no Gemini calls, no ChromaDB, no file I/O — so
+run entirely offline — no external LLM calls, no remote APIs, no file I/O — so
 they execute instantly and can be trusted in CI without secrets.
 
 Covered modules:

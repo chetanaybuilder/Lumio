@@ -9,8 +9,8 @@ override them through process environment variables.
 
 Environment variables
 ---------------------
-GEMINI_API_KEY         : API key for Google Gemini (embeddings + generation).
-GEMINI_MODEL           : Text-generation model name (default: gemini-3.8-flash).
+GROQ_API_KEY           : API key for Groq Cloud (high-speed LLM inference).
+GROQ_MODEL             : Text-generation model name (default: openai/gpt-oss-20b).
 LUMIO_TEMP_DIR         : Writable directory for temporary upload files.
 LUMIO_CHROMA_DIR       : Persistent directory for the ChromaDB vector store.
 SESSION_TTL_SECONDS    : Sliding inactivity expiry for study sessions (seconds).
@@ -40,14 +40,14 @@ CHROMA_DIR = Path(os.getenv("LUMIO_CHROMA_DIR", BASE_DIR / ".chroma"))
 
 
 # ---------------------------------------------------------------------------
-# Gemini AI provider
+# Groq AI provider
 # ---------------------------------------------------------------------------
 
-# Google Gemini API key — required for embeddings and study-material generation.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# Groq API key — required for high-speed study-material generation and chat.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # Text-generation model identifier used for notes, quizzes, flashcards, and chat.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 
 # ---------------------------------------------------------------------------
