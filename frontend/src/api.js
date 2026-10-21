@@ -41,7 +41,21 @@ async function request(path, token, options = {}) {
   if (!response.ok) {
     // Parse the error detail from the backend's JSON response.
     const payload = await response.json().catch(() => ({}))
-    throw new Error(payload.detail || `Request failed (${response.status})`)
+    const detail = payload.detail || ''
+    if (
+      response.status === 429 ||
+      response.status === 413 ||
+      response.status >= 500 ||
+      detail.toLowerCase().includes('rate limit') ||
+      detail.toLowerCase().includes('token') ||
+      detail.toLowerCase().includes('quota') ||
+      detail.toLowerCase().includes('dev tier') ||
+      detail.toLowerCase().includes('capacity') ||
+      detail.toLowerCase().includes('bugs')
+    ) {
+      throw new Error("App has some bugs, devs are fixing! Please come back after some time.")
+    }
+    throw new Error(detail || "App has some bugs, devs are fixing! Please come back after some time.")
   }
 
   // 204 No Content responses have no body to parse.

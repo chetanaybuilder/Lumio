@@ -20,7 +20,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   BookOpenText, BrainCircuit, Check, ChevronLeft, ChevronRight, CircleHelp,
-  Download, FileText, Flame, Layers3, LoaderCircle, MessageCircle, RotateCcw,
+  Download, FileText, Flame, Layers3, LoaderCircle, Mail, MessageCircle, RotateCcw,
   Send, Shuffle, Sparkles, Upload, X,
 } from 'lucide-react'
 import { closeSession, createSession, exportPdf, generate, getDocument, uploadDocument } from './api.js'
@@ -808,6 +808,20 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
         </button>
         <span>GROUNDED IN YOUR UPLOADED TEXTBOOK</span>
       </form>
+
+      {/* Founder Direct Feedback */}
+      <div className="chat-founder-feedback">
+        <span className="feedback-hint">Need help, found an issue, or have a suggestion?</span>
+        <a
+          href="mailto:chetanaybatta361@gmail.com?subject=Lumio%20Feedback%20for%20Founder&body=Hi%20Chetanay,%0D%0A%0D%0AHere%20is%20my%20feedback%20or%20question%20about%20Lumio:%0D%0A"
+          className="feedback-founder-link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Mail size={13} />
+          <span>Send feedback to founder (chetanaybatta361@gmail.com)</span>
+        </a>
+      </div>
     </div>
   )
 }

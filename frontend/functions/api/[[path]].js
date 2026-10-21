@@ -138,6 +138,23 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   return { text: extractedText.trim(), pageCount };
 }
 
+const STUDENT_ERROR_MESSAGE = "App has some bugs, devs are fixing! Please come back after some time.";
+
+// Clean and safely parse JSON from AI response
+function extractJson(rawText) {
+  let cleaned = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+    }
+    throw err;
+  }
+}
+
 // Call Groq API with JSON Schema
 async function callGroq(apiKey, prompt, schema) {
   const url = "https://api.groq.com/openai/v1/chat/completions";
@@ -145,12 +162,10 @@ async function callGroq(apiKey, prompt, schema) {
   const schemaStr = typeof schema === "object" ? JSON.stringify(schema, null, 2) : String(schema);
   const systemPrompt = `You are an expert educational AI assistant. You MUST return ONLY a valid, well-formed JSON object strictly conforming to this schema:\n${schemaStr}\n\nDo NOT include markdown fences (no \`\`\`json) or any conversational text outside the JSON.`;
 
-  // Safely limit prompt to ~7 500 characters so (prompt + max_tokens) stays well under 8 000 TPM
-  let activePrompt = prompt.length > 7500 ? prompt.slice(0, 7500) + "\n...[Context truncated to fit token limits]..." : prompt;
+  let activePrompt = prompt.length > 7000 ? prompt.slice(0, 7000) + "\n...[Context truncated]..." : prompt;
   let maxTokens = 1500;
 
-  let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const body = {
         model: GROQ_MODEL,
@@ -174,26 +189,64 @@ async function callGroq(apiKey, prompt, schema) {
 
       if (!res.ok) {
         const errText = await res.text();
-        // If 413 or rate limit hit, immediately cut context in half and reduce output tokens
         if (res.status === 413 || errText.includes("rate_limit") || errText.includes("too large")) {
-          activePrompt = activePrompt.slice(0, 3500) + "\n...[Context trimmed to fit rate limit]...";
+          activePrompt = activePrompt.slice(0, 3500);
           maxTokens = 1000;
         }
-        throw new Error(`Groq API returned ${res.status}: ${errText}`);
+        throw new Error(`Groq returned ${res.status}`);
       }
 
       const data = await res.json();
-      let rawText = data?.choices?.[0]?.message?.content;
-      if (!rawText) throw new Error("Empty response from Groq");
-
-      rawText = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      return JSON.parse(rawText);
+      const rawText = data?.choices?.[0]?.message?.content;
+      if (!rawText) throw new Error("Empty response");
+      return extractJson(rawText);
     } catch (err) {
-      lastError = err;
-      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      if (attempt === 1) throw err;
+      await new Promise((r) => setTimeout(r, 600));
     }
   }
-  throw lastError;
+}
+
+// Unified AI Dispatcher: Cloudflare Workers AI -> Groq Fallback -> Friendly Error
+async function callAI(env, prompt, schema) {
+  const schemaStr = typeof schema === "object" ? JSON.stringify(schema, null, 2) : String(schema);
+  const systemPrompt = `You are an expert educational AI assistant. You MUST return ONLY a valid, well-formed JSON object strictly conforming to this schema:\n${schemaStr}\n\nDo NOT include markdown fences (no \`\`\`json) or any conversational text outside the JSON.`;
+
+  const activePrompt = prompt.length > 7000 ? prompt.slice(0, 7000) + "\n...[Context truncated]..." : prompt;
+
+  // 1. Primary: Cloudflare Workers AI (@cf/meta/llama-3.1-8b-instruct)
+  if (env?.AI) {
+    try {
+      const aiRes = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: activePrompt },
+        ],
+        max_tokens: 1500,
+        temperature: 0.2,
+      });
+
+      const responseText = aiRes?.response || aiRes?.text || (typeof aiRes === "string" ? aiRes : "");
+      if (responseText) {
+        return extractJson(responseText);
+      }
+    } catch (cfError) {
+      console.warn("Cloudflare Workers AI call failed, attempting fallback:", cfError?.message || cfError);
+    }
+  }
+
+  // 2. Secondary fallback: Groq LPU API
+  const apiKey = getApiKey(env);
+  if (apiKey) {
+    try {
+      return await callGroq(apiKey, activePrompt, schema);
+    } catch (groqError) {
+      console.warn("Groq fallback call failed:", groqError?.message || groqError);
+    }
+  }
+
+  // Graceful student error if daily limit or all engines are exhausted
+  throw new Error(STUDENT_ERROR_MESSAGE);
 }
 
 export async function onRequest(context) {
@@ -337,7 +390,7 @@ Organize into clear sections with heading, detailed content, and source_pages (e
         required: ["title", "sections"],
       };
 
-      const result = await callGroq(apiKey, prompt, schema);
+      const result = await callAI(env, prompt, schema);
       doc.materials[kind] = result;
       await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
@@ -379,7 +432,7 @@ ${doc.text.slice(0, 7000)}`;
         required: ["title", "questions"],
       };
 
-      const result = await callGroq(apiKey, prompt, schema);
+      const result = await callAI(env, prompt, schema);
       doc.materials["quiz"] = result;
       await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
@@ -416,7 +469,7 @@ ${doc.text.slice(0, 7000)}`;
         required: ["title", "cards"],
       };
 
-      const result = await callGroq(apiKey, prompt, schema);
+      const result = await callAI(env, prompt, schema);
       doc.materials["flashcards"] = result;
       await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
@@ -444,7 +497,7 @@ ${doc.text.slice(0, 7000)}`;
         required: ["answer"],
       };
 
-      const result = await callGroq(apiKey, prompt, schema);
+      const result = await callAI(env, prompt, schema);
       return jsonResponse(result);
     }
 
@@ -515,6 +568,7 @@ ${350 + streamText.length}
 
     return errorResponse(`Endpoint not found: ${path}`, 404);
   } catch (err) {
-    return errorResponse(err.message || "Internal edge server error", 500);
+    console.error("Endpoint error:", err);
+    return errorResponse(STUDENT_ERROR_MESSAGE, 503);
   }
 }
