@@ -1,15 +1,61 @@
+"""
+Embedding Generator — Lumio Backend
+=====================================
+
+Thin convenience layer over ``gemini_client.embed_texts`` that adds:
+
+- Input validation (type checks and empty-string rejection).
+- Automatic batching — large document chunk lists are split into batches
+  of ``BATCH_SIZE`` texts to stay within provider request-size limits.
+- A single-text shortcut (``generate_embedding``) for query-time use.
+
+Two Gemini task types control how vectors are optimized:
+
+- ``RETRIEVAL_DOCUMENT`` — used when embedding stored document chunks.
+- ``RETRIEVAL_QUERY`` — used when embedding a student's question for
+  nearest-neighbor search against stored chunks.
+"""
 
 from app.gemini_client import EMBEDDING_DIMENSIONS, embed_texts
 
 
+# ---------------------------------------------------------------------------
+# Provider batch-size limit
+# ---------------------------------------------------------------------------
+
+# Maximum number of texts sent to Gemini in a single embedding request.
 BATCH_SIZE = 50
 
 
+# ---------------------------------------------------------------------------
+# Single-text embedding
+# ---------------------------------------------------------------------------
+
 def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
     """
-    Generate an embedding vector for one text.
-    """
+    Generate an embedding vector for one text string.
 
+    Parameters
+    ----------
+    text : str
+        The text to embed.  Must be a non-empty string.
+    task_type : str, optional
+        Gemini task type (default ``RETRIEVAL_DOCUMENT``).
+
+    Returns
+    -------
+    list[float]
+        A 768-dimensional embedding vector.
+
+    Raises
+    ------
+    TypeError
+        If *text* is not a string.
+    ValueError
+        If *text* is empty or whitespace-only.
+    RuntimeError
+        If the Gemini provider call fails.
+    """
     if not isinstance(text, str):
         raise TypeError("Text must be a string")
 
@@ -22,29 +68,50 @@ def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list
         raise RuntimeError("Failed to generate embedding. Check Gemini availability and configuration.") from error
 
 
+# ---------------------------------------------------------------------------
+# Batch embedding
+# ---------------------------------------------------------------------------
+
 def generate_embeddings(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
     """
-    Generate embedding vectors for multiple texts.
-    """
+    Generate embedding vectors for multiple texts, batching automatically.
 
+    Parameters
+    ----------
+    texts : list[str]
+        A list of non-empty text strings to embed.
+    task_type : str, optional
+        Gemini task type (default ``RETRIEVAL_DOCUMENT``).
+
+    Returns
+    -------
+    list[list[float]]
+        One 768-dimensional vector per input text.
+
+    Raises
+    ------
+    TypeError
+        If *texts* is not a list or contains non-string items.
+    ValueError
+        If any text in the list is empty or whitespace-only.
+    RuntimeError
+        If the Gemini provider call fails.
+    """
     if not isinstance(texts, list):
         raise TypeError("Texts must be provided as a list")
 
     if not texts:
         return []
 
+    # Validate every item before sending anything to the provider.
     for text in texts:
         if not isinstance(text, str):
-            raise TypeError(
-                "Every item in texts must be a string"
-            )
-
+            raise TypeError("Every item in texts must be a string")
         if not text.strip():
-            raise ValueError(
-                "Texts cannot contain empty strings"
-            )
+            raise ValueError("Texts cannot contain empty strings")
 
     try:
+        # Split the request into batches to respect provider size limits.
         embeddings = []
         for start in range(0, len(texts), BATCH_SIZE):
             embeddings.extend(embed_texts(texts[start:start + BATCH_SIZE], task_type))

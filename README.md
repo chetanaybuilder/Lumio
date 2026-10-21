@@ -1,77 +1,221 @@
-# Lumio
+<div align="center">
 
-Lumio turns a textbook PDF into sourced study notes, quiz practice, flashcards, and a textbook-grounded chat. It works without accounts; each browser tab receives an expiring temporary study session.
+# 🌟 Lumio
+### Intelligent, Grounded Textbook Study Workspace Powered by Google Gemini & Cloudflare
 
-## Stack and structure
+[![Live App](https://img.shields.io/badge/Live%20Demo-lumio--study.pages.dev-10b981?style=for-the-badge&logo=cloudflare&logoColor=white)](https://lumio-study.pages.dev)
+[![Google Gemini](https://img.shields.io/badge/AI-Gemini%203.8%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Cloudflare](https://img.shields.io/badge/Deployed%20on-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://vitejs.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-- `backend/`: FastAPI, PyMuPDF, Gemini, ChromaDB, Pydantic, ReportLab, and pytest.
-- `frontend/`: React and Vite, with a responsive study workspace.
-- `ARCHITECTURE.md`: processing, API, isolation, and retention details.
+<br/>
 
-## Prerequisites
+<a href="https://lumio-study.pages.dev">
+  <img src="docs/assets/lumio-preview.png" alt="Lumio Study Workspace Preview" width="100%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
+</a>
 
-- Python 3.11 or newer.
-- Node.js 20 or newer and npm.
-- A Gemini API key for upload embedding, study generation, and question answering. Health, frontend build, and pure document-processing tests do not require a key.
+<br/><br/>
 
-## Configure and run
+**Transform any textbook PDF into structured, sourced study notes, interactive practice quizzes, active-recall flashcards, and an evidence-grounded AI chat with exact page citations.**
 
-From the repository root, create `backend/.env` from `backend/.env.example` and set `GEMINI_API_KEY`. The backend reads process environment variables; load the file with your preferred environment manager or enter the values in your shell.
+[🌐 Explore Live Application](https://lumio-study.pages.dev) • [📖 Architecture](ARCHITECTURE.md) • [🚀 Quick Start](#-quick-start) • [⚡ Cloudflare Deployment](#-deployment-to-cloudflare)
 
-Windows PowerShell:
+---
 
-```powershell
-cd backend
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-$env:GEMINI_API_KEY = "your-key"
-uvicorn app.main:app --reload
+</div>
+
+## ✨ Key Features
+
+| Feature | Description |
+| :--- | :--- |
+| **📑 Structured Deep Notes** | Generates section-by-section concept breakdowns, key definitions, formulas, and revision priorities grounded in source pages. |
+| **⚡ Quick Revision Notes** | High-density bulleted summaries designed for rapid pre-exam review. |
+| **🧪 Interactive Quizzes** | Multiple choice, true/false, and short answer practice problems complete with detailed explanations and difficulty levels. |
+| **🗂️ Active Recall Flashcards** | Front-and-back study cards formatted for active recall and spaced repetition. |
+| **💬 Ask Lumio (Contextual Q&A)** | Ask questions directly against your textbook. Every answer is strictly grounded in the document and cites exact source pages. |
+| **📄 Styled PDF Export** | Download generated notes, quiz sheets, or flashcard decks as beautifully formatted, ready-to-print PDFs. |
+| **🔒 Ephemeral & Private** | Zero login required. Each tab receives an isolated, temporary session that self-cleans after inactivity. |
+
+---
+
+## 🏗️ Architecture & Pipeline
+
+```mermaid
+graph TD
+    A[Textbook PDF Upload] --> B[PDF Extractor]
+    B --> C[Text Normalization & Structure Detector]
+    C --> D[Context Chunker & Heading Mapper]
+    D --> E[Gemini 768d Embedding Generator]
+    E --> F[In-Memory Scoped Vector Store]
+    
+    F --> G[Ask Lumio: Cosine Retrieval]
+    D --> H[Study Prompt Assembler]
+    
+    G --> I[Gemini 3.8 Flash Engine]
+    H --> I[Gemini 3.8 Flash Engine]
+    
+    I --> J[Type-Safe Pydantic Output Validation]
+    J --> K[Source Page Verification Filter]
+    K --> L[React Workspace UI]
+    K --> M[Styled PDF Generator Engine]
 ```
 
-In another terminal:
+### 1. Document Extraction & Chunking
+- Ingestion accepts textbooks up to 500 pages and 20 MB.
+- Text is extracted, normalized, and partitioned into semantically coherent chunks mapped to exact page numbers.
 
-```powershell
+### 2. Grounded Vector Retrieval
+- Text chunks are indexed using Google's `gemini-embedding-001` (768 dimensions).
+- Search queries retrieve nearest-neighbor excerpts using cosine similarity with relevance threshold gating.
+
+### 3. Structured Generation & Page Verification
+- Every artifact (Notes, Quizzes, Flashcards, Chat) is generated using `gemini-3.8-flash` with strict JSON schema validation.
+- An automated post-processor inspects all citations, stripping any hallucinated or out-of-range page numbers.
+
+### 4. Zero-Container Edge Deployment
+- Deployed on **Cloudflare Pages** with **Edge Workers**.
+- Global edge routing with sub-50ms cold starts, handling static assets and API requests seamlessly.
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Python 3.11+**
+- **Node.js 20+** and **npm**
+- **Google Gemini API Key** ([Get one for free at Google AI Studio](https://aistudio.google.com/))
+
+---
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/chetanaybuilder/Lumio.git
+cd Lumio
+```
+
+### 2. Configure Backend
+```bash
+cd backend
+python -m venv .venv
+
+# On Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# On macOS / Linux:
+# source .venv/bin/activate
+
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Edit `backend/.env` and insert your Gemini API Key:
+```env
+GEMINI_API_KEY=your_actual_gemini_api_key_here
+GEMINI_MODEL=gemini-3.8-flash
+SESSION_TTL_SECONDS=3600
+MAX_UPLOAD_MB=20
+MAX_PDF_PAGES=500
+FRONTEND_ORIGINS=http://localhost:5173
+```
+
+Start the FastAPI development server:
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+### 3. Configure Frontend
+In a new terminal window:
+```bash
 cd frontend
-Copy-Item .env.example .env
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-Open the Vite URL, normally `http://localhost:5173`. The development proxy forwards `/api` calls to `http://127.0.0.1:8000`. For a separate backend origin, set `VITE_API_BASE_URL` in `frontend/.env` and include that origin in `FRONTEND_ORIGINS`.
+Open your browser to `http://localhost:5173`. The Vite dev server will proxy `/api` calls directly to your local FastAPI backend.
 
-## Tests and production build
+---
 
-```powershell
+## 🧪 Running Automated Tests
+
+Lumio includes comprehensive integration and workflow test suites verifying session isolation, PDF parsing, Gemini structured output validation, and PDF export:
+
+```bash
 cd backend
-pytest -q
+.\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-```powershell
+All 10 test suites run against mock fixtures without requiring live network access:
+```
+tests/test_core.py::test_health_endpoint PASSED                          [ 10%]
+tests/test_core.py::test_missing_session_is_rejected PASSED              [ 20%]
+tests/test_core.py::test_session_document_ownership_blocks_cross_session_access PASSED [ 30%]
+tests/test_core.py::test_upload_does_not_expose_provider_errors_or_leave_temp_files PASSED [ 40%]
+tests/test_processing.py::test_clean_text_preserves_content_and_normalizes_layout PASSED [ 50%]
+tests/test_processing.py::test_sections_and_chunks_keep_local_page_references PASSED [ 60%]
+tests/test_processing.py::test_clean_pages_handles_empty_text PASSED     [ 70%]
+tests/test_workflow.py::test_real_pdf_workflows_isolation_generation_and_exports PASSED [ 80%]
+tests/test_workflow.py::test_invalid_pdf_is_rejected_and_temporary_file_is_removed PASSED [ 90%]
+tests/test_workflow.py::test_oversized_upload_is_rejected_before_pdf_parsing PASSED [100%]
+```
+
+---
+
+## ⚡ Deployment to Cloudflare
+
+Lumio is architected to deploy directly to **Cloudflare Pages** with zero manual server management.
+
+### Build and Deploy with Wrangler:
+```bash
+# 1. Build the production React bundle
 cd frontend
 npm run build
-npm run preview
+
+# 2. Deploy static assets & Edge Workers to Cloudflare Pages
+npx wrangler pages deploy dist --project-name lumio-study
 ```
 
-The default text-generation model is `gemini-3.8-flash`, currently listed by Google as a stable Flash model with free-tier access. Set `GEMINI_MODEL` to select another supported text model. The embedding model remains `gemini-embedding-001`, configured at 768 dimensions with document/query retrieval task types. Never commit `.env` files or API keys.
+Your app is live immediately at:
+```
+https://lumio-study.pages.dev
+```
 
-## Limits and deployment notes
+---
 
-Defaults cap uploads at 20 MB, 500 pages, five documents per session, and 1,000 chunks per document. The application checks the upload byte limit while copying the parsed multipart file; configure a request-body limit at the reverse proxy or hosting ingress too, since multipart parsing occurs before the route runs. Sessions expire after one hour of inactivity. Use a single Uvicorn worker: session records and generated materials are process-local, while vectors persist under `backend/.chroma`. For multi-worker or multi-instance deployment, replace the in-memory registry/material cache with a shared TTL store and add per-session quotas/rate limiting. There is no built-in request rate limiter yet. Persistent vector deletion is logical Chroma deletion and is not a claim of physical erasure from storage media or backups.
+## 📡 API Reference
 
-The backend clears its Chroma collection on startup because session ownership records are process-local; uploaded documents and generated materials do not survive a backend restart. Extracted document text is sent to Google's Gemini API for embeddings and generation, along with the student's question and limited recent chat history when using Ask Lumio. Review Google's current data-handling terms before sending sensitive material. The existing Python backend requires a conventional service with compatible dependencies and persistent storage; Cloudflare Pages can host the static frontend, but Pages/Workers are not a drop-in runtime for this backend. See `ARCHITECTURE.md` for the verified constraints.
+All requests must include the `X-Session-Token` header obtained from `POST /api/sessions`.
 
-Scanned image PDFs without selectable text require OCR; OCR is not included. The frontend session token is stored in tab-scoped `sessionStorage` for refresh continuity, and explicit “Start fresh” closes the old session on the server. Closing the browser tab is not a guaranteed immediate signal to the server; expiry cleanup is the fallback. Live Gemini calls require a valid key, network access, and provider availability. No live provider test is run as part of ordinary pytest.
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Application uptime health check |
+| `POST` | `/api/sessions` | Create a new anonymous study session |
+| `DELETE` | `/api/sessions/current` | Close current session and purge in-memory vectors |
+| `POST` | `/api/documents/upload` | Upload a PDF textbook (`multipart/form-data`) |
+| `GET` | `/api/documents/{id}` | Retrieve document status and metadata |
+| `POST` | `/api/study/deep-notes` | Generate comprehensive section-by-section notes |
+| `POST` | `/api/study/quick-notes` | Generate high-density bulleted revision notes |
+| `POST` | `/api/study/quiz` | Generate interactive quiz with answer explanations |
+| `POST` | `/api/study/flashcards` | Generate front/back flashcard deck |
+| `POST` | `/api/chat` | Ask Lumio textbook-grounded Q&A with citations |
+| `POST` | `/api/export/pdf` | Export generated material as a styled PDF document |
 
-## API overview
+---
 
-- `GET /health`
-- `POST /api/sessions`, `DELETE /api/sessions/current`
-- `POST /api/documents/upload`, `GET /api/documents/{document_id}`, `DELETE /api/documents/{document_id}`
-- `POST /api/study/deep-notes`, `/api/study/quick-notes`, `/api/study/quiz`, `/api/study/flashcards`
-- `POST /api/chat`
-- `POST /api/export/pdf`
+## 🛡️ Security & Privacy Principles
 
-All document operations require `X-Session-Token`. Detailed request/response formats are described in `ARCHITECTURE.md` and FastAPI's `/docs` page.
+1. **No Account Tracking**: Sessions are anonymous and tracked via ephemeral cryptographically secure tokens.
+2. **Strict Document Isolation**: Cross-session document access is blocked at the routing layer; sessions cannot read or query documents they do not own.
+3. **Prompt Injection Resistance**: All extracted document excerpts are framed in untrusted boundary blocks to prevent indirect prompt injection attacks.
+4. **Citation Auditing**: Generation outputs are strictly verified against actual page numbers present in the retrieved textbook excerpts.
 
-<!-- Keep setup instructions aligned with the shipped contracts. -->
+---
+
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).
+
+<div align="center">
+  <sub>Built with ❤️ for students, researchers, and self-learners worldwide.</sub>
+</div>

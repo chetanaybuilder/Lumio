@@ -139,6 +139,164 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .source-line { display: inline-flex; gap: 8px; margin-top: 12px; color: #919187; font-size: 8px; font-weight: 700; }
 .source-line span { color: #5d7468; }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANIME-STYLE NOTES — Colorful borders, decorative corners, and accents
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* --- Anime notes container with gradient border --- */
+.anime-notes {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-top: 4px solid transparent;
+  border-image: linear-gradient(135deg, #FF6B9D, #00D2FF, #FFB347, #7B68EE, #50C878, #FF69B4) 1;
+  background-image:
+    linear-gradient(90deg, transparent 29px, rgba(255, 107, 157, 0.06) 30px, transparent 31px),
+    radial-gradient(circle at 10% 20%, rgba(255,107,157,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(0,210,255,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(123,104,238,0.02) 0%, transparent 70%);
+  box-shadow:
+    0 4px 24px rgba(255,107,157,0.08),
+    0 0 60px rgba(123,104,238,0.04),
+    0 8px 32px rgba(43, 38, 28, .05);
+}
+
+/* --- Decorative corner elements --- */
+.anime-corner {
+  position: absolute;
+  font-size: 22px;
+  opacity: 0.5;
+  pointer-events: none;
+  animation: anime-float 4s ease-in-out infinite;
+  z-index: 1;
+}
+.anime-corner-tl { top: 12px; left: 14px; color: #FF6B9D; animation-delay: 0s; }
+.anime-corner-tr { top: 12px; right: 14px; color: #00D2FF; animation-delay: 1s; }
+.anime-corner-bl { bottom: 12px; left: 14px; color: #FFB347; animation-delay: 2s; }
+.anime-corner-br { bottom: 12px; right: 14px; color: #7B68EE; animation-delay: 3s; }
+
+@keyframes anime-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.5; }
+  50% { transform: translateY(-4px) rotate(8deg); opacity: 0.8; }
+}
+
+/* --- Sparkle strip decoration along the top --- */
+.anime-sparkle-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+    #FF6B9D 0%, #FFB347 16%, #FFD700 32%, #50C878 48%,
+    #00D2FF 64%, #7B68EE 80%, #FF69B4 100%);
+  background-size: 200% 100%;
+  animation: anime-shimmer 3s linear infinite;
+}
+
+@keyframes anime-shimmer {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+/* --- Anime topline header with gradient text --- */
+.anime-topline span:first-child {
+  background: linear-gradient(135deg, #FF6B9D, #7B68EE, #00D2FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+/* --- Anime title with gradient effect --- */
+.anime-title {
+  background: linear-gradient(135deg, #2d2d2d 0%, #FF6B9D 50%, #7B68EE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  background-size: 300% 100%;
+  animation: anime-title-gradient 6s ease-in-out infinite;
+}
+
+@keyframes anime-title-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* --- Anime section with glowing colorful borders --- */
+.anime-section {
+  position: relative;
+  margin: 0 0 24px;
+  padding: 20px 22px 18px 22px;
+  border-left: 4px solid var(--anime-border, #FF6B9D);
+  border-radius: 0 10px 10px 0;
+  background: var(--anime-bg, rgba(255,107,157,0.06));
+  box-shadow:
+    0 2px 12px var(--anime-glow, rgba(255,107,157,0.12)),
+    inset 0 0 30px var(--anime-glow, rgba(255,107,157,0.04));
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+.anime-section:hover {
+  box-shadow:
+    0 4px 20px var(--anime-glow, rgba(255,107,157,0.2)),
+    inset 0 0 40px var(--anime-glow, rgba(255,107,157,0.06));
+  transform: translateX(4px);
+}
+
+/* --- Anime badge (emoji decoration) --- */
+.anime-badge {
+  position: absolute;
+  top: -8px;
+  right: 16px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  animation: anime-badge-bounce 2s ease-in-out infinite;
+}
+
+@keyframes anime-badge-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* --- Anime section number with glow --- */
+.anime-number {
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 0 8px currentColor;
+}
+
+/* --- Anime source line --- */
+.anime-source {
+  font-size: 9px;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.5);
+  backdrop-filter: blur(4px);
+}
+
+/* --- Anime footer decoration --- */
+.anime-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 2px dashed;
+  border-image: linear-gradient(90deg, #FF6B9D, #FFB347, #50C878, #00D2FF, #7B68EE) 1;
+  color: #999;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+
 .quiz-wrap { border: 1px solid #ded9ce; border-radius: 5px; background: #fbfaf6; }
 .quiz-toolbar { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 20px; border-bottom: 1px solid #e5e0d6; color: #818178; font-size: 9px; font-weight: 700; }
 .quiz-toolbar > span:first-child { display: flex; align-items: center; gap: 9px; }
