@@ -145,20 +145,24 @@ async function callGroq(apiKey, prompt, schema) {
   const schemaStr = typeof schema === "object" ? JSON.stringify(schema, null, 2) : String(schema);
   const systemPrompt = `You are an expert educational AI assistant. You MUST return ONLY a valid, well-formed JSON object strictly conforming to this schema:\n${schemaStr}\n\nDo NOT include markdown fences (no \`\`\`json) or any conversational text outside the JSON.`;
 
-  const body = {
-    model: GROQ_MODEL,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.2,
-    max_tokens: 4096,
-  };
+  // Safely limit prompt to ~7 500 characters so (prompt + max_tokens) stays well under 8 000 TPM
+  let activePrompt = prompt.length > 7500 ? prompt.slice(0, 7500) + "\n...[Context truncated to fit token limits]..." : prompt;
+  let maxTokens = 1500;
 
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
+      const body = {
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: activePrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: maxTokens,
+      };
+
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -170,6 +174,11 @@ async function callGroq(apiKey, prompt, schema) {
 
       if (!res.ok) {
         const errText = await res.text();
+        // If 413 or rate limit hit, immediately cut context in half and reduce output tokens
+        if (res.status === 413 || errText.includes("rate_limit") || errText.includes("too large")) {
+          activePrompt = activePrompt.slice(0, 3500) + "\n...[Context trimmed to fit rate limit]...";
+          maxTokens = 1000;
+        }
         throw new Error(`Groq API returned ${res.status}: ${errText}`);
       }
 
@@ -181,7 +190,7 @@ async function callGroq(apiKey, prompt, schema) {
       return JSON.parse(rawText);
     } catch (err) {
       lastError = err;
-      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
     }
   }
   throw lastError;
@@ -304,7 +313,7 @@ export async function onRequest(context) {
       const prompt = `Create ${kind} for a student using this textbook content.
 Document: ${doc.filename}
 Textbook Content:
-${doc.text.slice(0, 15000)}
+${doc.text.slice(0, 7000)}
 
 Organize into clear sections with heading, detailed content, and source_pages (e.g. [1]).`;
 
@@ -344,7 +353,7 @@ Organize into clear sections with heading, detailed content, and source_pages (e
       const prompt = `Generate ${count} interactive quiz questions based on this textbook content.
 Document: ${doc.filename}
 Textbook Content:
-${doc.text.slice(0, 15000)}`;
+${doc.text.slice(0, 7000)}`;
 
       const schema = {
         type: "OBJECT",
@@ -385,7 +394,7 @@ ${doc.text.slice(0, 15000)}`;
       const prompt = `Generate focused study flashcards with front (question) and back (answer) based on this textbook:
 Document: ${doc.filename}
 Textbook Content:
-${doc.text.slice(0, 15000)}`;
+${doc.text.slice(0, 7000)}`;
 
       const schema = {
         type: "OBJECT",
@@ -424,7 +433,7 @@ ${doc.text.slice(0, 15000)}`;
 Question: ${question}
 Document: ${doc.filename}
 Textbook Content:
-${doc.text.slice(0, 15000)}`;
+${doc.text.slice(0, 7000)}`;
 
       const schema = {
         type: "OBJECT",

@@ -201,8 +201,9 @@ def document_context(document: dict) -> tuple[str, set[int]]:
     """
     Build a text context string from a document's chunks for prompting.
 
-    Returns the concatenated excerpt text (capped at ~36 000 characters)
-    and the set of page numbers represented in those excerpts.
+    Returns the concatenated excerpt text (capped at ~9 000 characters to stay
+    well within Groq's 8 000 TPM free-tier limit) and the set of page numbers
+    represented in those excerpts.
     """
     excerpts = []
     pages: set[int] = set()
@@ -210,11 +211,12 @@ def document_context(document: dict) -> tuple[str, set[int]]:
         chunk_pages = chunk.get("source_pages", [])
         pages.update(chunk_pages)
         excerpt = f"[Pages {', '.join(map(str, chunk_pages))}; {chunk.get('section', 'Section')}] {chunk['text']}"
-        # Cap the total context length to avoid exceeding model limits.
-        if sum(map(len, excerpts)) + len(excerpt) > 36000:
+        # Cap total context length to stay safely below Groq's on-demand TPM limits
+        if sum(map(len, excerpts)) + len(excerpt) > 9000:
             break
         excerpts.append(excerpt)
     return "\n\n".join(excerpts), pages
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -433,7 +435,7 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
         logger.exception("Study material generation failed")
         raise HTTPException(
             status_code=503,
-            detail="Study generation failed. Check Gemini configuration and retry.",
+            detail="Study generation failed. Check Groq configuration and retry.",
         ) from error
 
 

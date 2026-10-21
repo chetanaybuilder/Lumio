@@ -108,17 +108,21 @@ def generate_structured(prompt: str, output_type: type[T]) -> T:
     )
 
     last_err = None
+    # Truncate prompt to ~8 500 chars to avoid exceeding Groq's 8 000 TPM limit
+    current_prompt = prompt if len(prompt) <= 8500 else prompt[:8500] + "\n...[Content truncated for context window]..."
+    token_limit = 1800
+
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[
                     {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": current_prompt},
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=token_limit,
             )
 
             raw_text = response.choices[0].message.content or ""
@@ -133,8 +137,14 @@ def generate_structured(prompt: str, output_type: type[T]) -> T:
             last_err = error
             continue
         except Exception as exc:
+            err_str = str(exc)
             logger.warning("Groq API request failed (attempt %d): %s", attempt + 1, exc)
+            # If rate limit or 413 payload too large, immediately trim prompt and token limit for retry
+            if "413" in err_str or "rate_limit" in err_str or "too large" in err_str:
+                current_prompt = current_prompt[:4000] + "\n...[Context trimmed to fit rate limit]..."
+                token_limit = 1200
             last_err = exc
             continue
 
     raise RuntimeError(f"Groq generation failed after retries: {last_err}")
+
