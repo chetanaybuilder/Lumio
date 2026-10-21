@@ -126,10 +126,6 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   return { text: extractedText.trim(), pageCount };
 }
 
-// Ultra-fast Groq LLM inference with strict JSON schema compliance
-async function callGroq(apiKey, prompt, schema) {
-  const url = "https://api.groq.com/openai/v1/chat/completions";
-
 const STUDENT_ERROR_MESSAGE = "App has some bugs, devs are fixing! Please come back after some time.";
 
 // Clean and safely parse JSON from AI response
