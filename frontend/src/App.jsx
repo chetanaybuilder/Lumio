@@ -492,6 +492,81 @@ export default function App() {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
+// FORMATTED CONTENT HELPER — Diagrams, Tables & Lists
+// ═══════════════════════════════════════════════════════════════════════════
+
+function FormattedContent({ content }) {
+  if (!content) return null
+
+  const blocks = content.split(/\n\n+/)
+
+  return (
+    <div className="formatted-content">
+      {blocks.map((block, idx) => {
+        const trimmed = block.trim()
+
+        // 1. Diagram / Visual callout
+        if (trimmed.startsWith('[FIGURE / DIAGRAM:') || trimmed.startsWith('[VISUAL ELEMENTS')) {
+          const cleanText = trimmed.replace(/^\[(?:FIGURE \/ DIAGRAM:|VISUAL ELEMENTS DETECTED.*?):?\s*/i, '').replace(/\]$/, '')
+          return (
+            <div key={idx} className="diagram-callout-card">
+              <div className="diagram-callout-header">
+                <span className="diagram-callout-icon">🎨</span>
+                <span className="diagram-callout-title">Visual & Diagram Analysis</span>
+              </div>
+              <div className="diagram-callout-body">{cleanText}</div>
+            </div>
+          )
+        }
+
+        // 2. Markdown table
+        if (trimmed.includes('| --- |') || (trimmed.startsWith('|') && trimmed.includes('\n|'))) {
+          const lines = trimmed.split('\n').filter(l => l.trim().startsWith('|'))
+          if (lines.length >= 2) {
+            const headerRow = lines[0].split('|').slice(1, -1).map(c => c.trim())
+            const dataRows = lines.slice(2).map(l => l.split('|').slice(1, -1).map(c => c.trim()))
+            return (
+              <div key={idx} className="table-responsive-wrapper">
+                <table className="anime-table">
+                  <thead>
+                    <tr>
+                      {headerRow.map((col, i) => <th key={i}>{col}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dataRows.map((row, rIdx) => (
+                      <tr key={rIdx}>
+                        {row.map((cell, cIdx) => <td key={cIdx}>{cell}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+        }
+
+        // 3. Bullet list
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+          const items = trimmed.split('\n').filter(l => l.trim().startsWith('* ') || l.trim().startsWith('- '))
+          return (
+            <ul key={idx} className="formatted-list">
+              {items.map((item, i) => (
+                <li key={i}>{item.replace(/^[\*\-]\s+/, '')}</li>
+              ))}
+            </ul>
+          )
+        }
+
+        // 4. Regular paragraph
+        return <p key={idx} className="formatted-paragraph">{trimmed}</p>
+      })}
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // NOTES PANEL — Anime-bordered colorful study notes
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -590,7 +665,7 @@ function NotesPanel({ material, onCopy, onGenerate, actionLabel }) {
                 </span>
                 <h3 style={{ color: accent.border }}>{section.heading}</h3>
               </div>
-              <p>{section.content}</p>
+              <FormattedContent content={section.content} />
               {section.source_pages?.length > 0 && (
                 <div className="source-line anime-source" style={{ color: accent.border }}>
                   📖 SOURCE PAGES <span>{section.source_pages.join(' · ')}</span>

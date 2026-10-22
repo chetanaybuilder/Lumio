@@ -3,61 +3,64 @@ Chunker — Lumio Backend
 ========================
 
 Splits structured sections into overlapping text windows ("chunks") that
-are small enough for effective embedding and retrieval.
+are optimal for vector embedding and context retrieval.
 
-Each section's content lines are flattened into a word list, then a
-sliding window of ``chunk_size`` words advances by ``chunk_size - overlap``
-words on each step.  The overlap ensures that sentences near chunk
-boundaries appear in at least two adjacent chunks, reducing the chance of
-a retrieval miss when relevant context straddles a boundary.
-
-Every chunk records:
-- ``text`` (str): the reassembled text for embedding.
-- ``section`` (str): the heading of the section it belongs to.
-- ``source_pages`` (list[int]): deduplicated, order-preserving page
-  numbers of the words in the chunk.
+Enhancements:
+1. Heading and Section preservation: Every chunk retains its chapter/section context.
+2. Diagram & Table preservation: Chunks containing diagram markers
+   (``[FIGURE / DIAGRAM: ...]``) or markdown tables (``| --- |``) are flagged
+   with metadata so retrieval algorithms can prioritize visual elements when
+   students ask about figures or tables.
+3. Sentence/Boundary awareness: Avoids creating empty chunks and preserves
+   multi-page citations across chunk boundaries.
 """
 
+from typing import Any
 
-# ---------------------------------------------------------------------------
-# Main chunking function
-# ---------------------------------------------------------------------------
 
 def create_chunks(
-    sections: list,
+    sections: list[dict[str, Any]],
     chunk_size: int = 500,
-    overlap: int = 50,
-) -> list:
+    overlap: int = 60,
+) -> list[dict[str, Any]]:
     """
-    Convert structured sections into overlapping text chunks.
+    Convert structured sections into overlapping text chunks with rich metadata.
 
     Parameters
     ----------
     sections : list[dict]
-        Sections produced by ``detect_structure``.  Each must contain
-        ``"heading"`` (str) and ``"content"`` (list of ``{"page", "text"}``
-        dicts).
+        Sections produced by ``detect_structure``. Each must contain
+        ``"heading"`` (str) and ``"content"`` (list of ``{"page", "text"}`` dicts).
     chunk_size : int, optional
         Maximum number of words per chunk (default 500).
     overlap : int, optional
-        Number of words shared between consecutive chunks (default 50).
+        Number of words shared between consecutive chunks (default 60).
 
     Returns
     -------
     list[dict]
-        Chunks with ``"text"``, ``"section"``, and ``"source_pages"``.
+        Chunks with ``"text"``, ``"section"``, ``"source_pages"``, ``"has_diagram"``,
+        and ``"has_table"``.
     """
     chunks = []
 
     for section in sections:
-        heading = section["heading"]
+        heading = section.get("heading", "Document Content")
+        content_items = section.get("content", [])
 
-        # Flatten every content line into a list of (word, page_number) tuples.
+        if not content_items:
+            continue
+
+        # Flatten section lines into a list of (word, page_number) tuples
         words = [
             (word, item["page"])
-            for item in section["content"]
+            for item in content_items
             for word in item["text"].split()
+            if word
         ]
+
+        if not words:
+            continue
 
         start = 0
 
@@ -65,23 +68,34 @@ def create_chunks(
             end = start + chunk_size
             chunk_words = words[start:end]
 
-            # Deduplicate page numbers while preserving the order of appearance.
+            # Deduplicate source page numbers while preserving chronological order
             source_pages = list(dict.fromkeys(page for _, page in chunk_words))
+            chunk_text = " ".join(word for word, _ in chunk_words).strip()
+
+            if not chunk_text:
+                break
+
+            has_diagram = (
+                "[FIGURE / DIAGRAM:" in chunk_text
+                or "[VISUAL ELEMENTS" in chunk_text
+                or "Fig." in chunk_text
+                or "Figure " in chunk_text
+            )
+            has_table = "| --- |" in chunk_text or "[STRUCTURED TABLES" in chunk_text
 
             chunks.append({
-                "text": " ".join(word for word, _ in chunk_words),
+                "text": chunk_text,
                 "section": heading,
                 "source_pages": source_pages,
+                "has_diagram": has_diagram,
+                "has_table": has_table,
             })
 
-            # Stop if this chunk reached the end of the section.
+            # If we reached the end of the section, stop chunking this section
             if end >= len(words):
                 break
 
-            # Advance the window, keeping `overlap` words from the current chunk.
+            # Slide window forward by (chunk_size - overlap)
             start = end - overlap
 
     return chunks
-
-
-# Chunk-level citations reflect the pages actually represented in each span.

@@ -44,7 +44,13 @@ from app.config import FRONTEND_ORIGINS, MAX_UPLOAD_BYTES, SESSION_TTL_SECONDS, 
 from app.embedding_generator import generate_embeddings, generate_embedding
 from app.export_service import make_pdf
 from app.groq_client import generate_structured
-from app.pdf_extractor import PDFPageLimitError, extract_text_from_pdf
+from app.pdf_extractor import (
+    PDFCorruptedError,
+    PDFEncryptedError,
+    PDFPageLimitError,
+    PDFScannedError,
+    extract_text_from_pdf,
+)
 from app.prompt_templates import chat_prompt, study_prompt
 from app.schemas import (
     ChatOutput,
@@ -199,23 +205,53 @@ def valid_pages(material: dict, allowed_pages: set[int]) -> dict:
 
 def document_context(document: dict) -> tuple[str, set[int]]:
     """
-    Build a text context string from a document's chunks for prompting.
+    Build a representative, structured text context string across the entire
+    document for comprehensive study material generation.
 
-    Returns the concatenated excerpt text (capped at ~9 000 characters to stay
-    well within Groq's 8 000 TPM free-tier limit) and the set of page numbers
-    represented in those excerpts.
+    Prioritizes chunks with diagrams and tables, while ensuring coverage
+    across all detected sections from the beginning, middle, and end of the document.
     """
+    chunks = document.get("chunks", [])
+    if not chunks:
+        return "", set()
+
+    max_chars = 9000
+    chosen_chunks = []
+
+    if len(chunks) <= 8:
+        chosen_chunks = list(chunks)
+    else:
+        visual_chunks = [c for c in chunks if c.get("has_diagram") or c.get("has_table")]
+        step = max(1, len(chunks) // 10)
+        sampled = [chunks[i] for i in range(0, len(chunks), step)]
+
+        seen_texts = set()
+        for c in visual_chunks + sampled:
+            if c["text"] not in seen_texts:
+                chosen_chunks.append(c)
+                seen_texts.add(c["text"])
+
+        chunk_order = {c["text"]: i for i, c in enumerate(chunks)}
+        chosen_chunks.sort(key=lambda c: chunk_order.get(c["text"], 0))
+
     excerpts = []
     pages: set[int] = set()
-    for chunk in document["chunks"]:
+    total_len = 0
+
+    for chunk in chosen_chunks:
         chunk_pages = chunk.get("source_pages", [])
-        pages.update(chunk_pages)
         excerpt = f"[Pages {', '.join(map(str, chunk_pages))}; {chunk.get('section', 'Section')}] {chunk['text']}"
-        # Cap total context length to stay safely below Groq's on-demand TPM limits
-        if sum(map(len, excerpts)) + len(excerpt) > 9000:
+        if total_len + len(excerpt) > max_chars:
+            if not excerpts:
+                excerpts.append(excerpt[:max_chars])
+                pages.update(chunk_pages)
             break
         excerpts.append(excerpt)
+        pages.update(chunk_pages)
+        total_len += len(excerpt)
+
     return "\n\n".join(excerpts), pages
+
 
 
 
@@ -362,8 +398,14 @@ async def upload_pdf(file: UploadFile = File(...), session: StudySession = Depen
 
     except HTTPException:
         raise
-    except (PDFPageLimitError,) as error:
-        raise HTTPException(status_code=413, detail="PDF exceeds the configured page limit.") from error
+    except PDFPageLimitError as error:
+        raise HTTPException(status_code=413, detail=str(error)) from error
+    except PDFEncryptedError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except PDFScannedError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except PDFCorruptedError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail="Unable to read this PDF. Check that the file is not damaged.") from error
     except RuntimeError as error:
@@ -449,7 +491,7 @@ async def deep_notes(request: DocumentRequest, session: StudySession = Depends(r
     """Generate detailed, section-by-section study notes from the textbook."""
     return await generate_notes(
         request, session, "deep-notes",
-        "Organize detailed concepts, definitions, formulas, examples, and revision priorities by section.",
+        "Generate comprehensive, structured notes across all chapters and sections. Include: Chapter/Section Overviews, Core Definitions, Visual & Diagram Mechanisms (explaining any figures, charts, or structural diagrams in depth), Mathematical Formulas & Scientific Units, Step-by-Step Processes, Worked Examples, Common Misconceptions, and Exam Takeaways.",
     )
 
 
@@ -458,7 +500,7 @@ async def quick_notes(request: DocumentRequest, session: StudySession = Depends(
     """Generate concise revision notes with only essential information."""
     return await generate_notes(
         request, session, "quick-notes",
-        "Create concise revision sections with essential definitions, formulas, facts, and distinctions.",
+        "Generate a high-yield rapid revision sheet. Include: Key Formulas with parameter definitions, Essential Definitions, High-Frequency Exam Facts, Crucial Scientific Distinctions, and Memory Mnemonics.",
     )
 
 
@@ -553,8 +595,15 @@ async def ask_lumio(request: ChatRequest, session: StudySession = Depends(requir
         # --- Embed the student's question for vector similarity search ---
         query_embedding = await run_in_threadpool(generate_embedding, request.question, "RETRIEVAL_QUERY")
 
-        # --- Retrieve the nearest document chunks ---
-        matches = await run_in_threadpool(query_chunks, session.token, request.document_id, query_embedding)
+        # --- Retrieve the nearest document chunks with hybrid reranking ---
+        matches = await run_in_threadpool(
+            query_chunks,
+            session.token,
+            request.document_id,
+            query_embedding,
+            6,
+            request.question,
+        )
 
         # --- Filter out chunks that are too distant (low relevance) ---
         matches = [match for match in matches if match["distance"] <= 0.85]

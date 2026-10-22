@@ -161,6 +161,7 @@ async function extractTextFromPdfBytes(arrayBuffer) {
     pageCount = pageMatches.length;
   }
 
+  let imageCount = 0;
   let fullText = "";
   const maxChars = 150000;
   const streamRegex = /[\r\n>]stream(?:\r\n|\n)/g;
@@ -172,8 +173,10 @@ async function extractTextFromPdfBytes(arrayBuffer) {
     const headerStart = Math.max(0, streamStart - 400);
     const headerStr = rawStr.slice(headerStart, streamStart);
 
-    // Skip true image bitmaps and binary font streams (never match loose "/Image" which matches "/ProcSet [/PDF /Text /ImageB]")
+    // Skip true image bitmaps and binary font streams
     const isImage = headerStr.includes("/Subtype /Image") || headerStr.includes("/Subtype/Image") || headerStr.includes("/DCTDecode") || headerStr.includes("/JPXDecode") || headerStr.includes("/JBIG2Decode");
+    if (isImage) imageCount++;
+
     const isFont = headerStr.includes("/Type /Font") || headerStr.includes("/Type/Font") || headerStr.includes("/FontDescriptor");
 
     const endStream = rawStr.indexOf("endstream", dataStart);
@@ -269,11 +272,11 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   }
 
   const cleaned = fullText.replace(/\s+/g, " ").trim();
-  // Return cleaned text without falling back to binary PDF metadata
-  return { text: cleaned, pageCount };
+  const isScanned = cleaned.length < 50 && imageCount > 0;
+  return { text: cleaned, pageCount, isScanned, imageCount };
 }
 
-// Intelligent TF-IDF / Keyword Context Retrieval for Ask Lumio RAG
+// Intelligent TF-IDF / Keyword & Diagram Context Retrieval for Ask Lumio RAG
 function retrieveRelevantChunks(chunks, query, maxChars = 7000) {
   if (!chunks || chunks.length === 0) return "";
   if (chunks.length === 1) return typeof chunks[0] === "string" ? chunks[0] : chunks[0].text || "";
@@ -290,6 +293,11 @@ function retrieveRelevantChunks(chunks, query, maxChars = 7000) {
         score += occurrences * 2;
         if (textLower.slice(0, 150).includes(term)) score += 5;
       }
+    }
+    // High-priority diagram bonus when student asks about visual elements
+    const isDiagQuery = queryTerms.some(t => ["diagram", "figure", "fig", "draw", "graph", "plot", "structure", "scheme", "illustration"].includes(t));
+    if (isDiagQuery && (textLower.includes("[figure") || textLower.includes("figure ") || textLower.includes("fig."))) {
+      score += 15;
     }
     return { chunk: typeof chunk === "string" ? chunk : chunk.text, score, index: idx };
   });
@@ -319,6 +327,43 @@ function retrieveRelevantChunks(chunks, query, maxChars = 7000) {
   }
 
   return selected.join("\n\n---\n\n");
+}
+
+// Build balanced, representative textbook context covering all sections and figures
+function getRepresentativeContext(doc, maxChars = 7500) {
+  const chunks = doc.chunks && doc.chunks.length > 0 ? doc.chunks : [doc.text || ""];
+  if (chunks.length <= 6) {
+    return chunks.join("\n\n---\n\n").slice(0, maxChars);
+  }
+
+  const selected = [];
+  let totalLen = 0;
+
+  // 1. Prioritize chunks with diagrams, figures, or tables
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    const textLower = (typeof c === "string" ? c : c.text || "").toLowerCase();
+    if (textLower.includes("[figure") || textLower.includes("figure ") || textLower.includes("table ") || textLower.includes("| --- |")) {
+      const len = typeof c === "string" ? c.length : c.text.length;
+      if (!selected.includes(c) && totalLen + len <= maxChars) {
+        selected.push(c);
+        totalLen += len;
+      }
+    }
+  }
+
+  // 2. Sample evenly across all sections of the document
+  const step = Math.max(1, Math.floor(chunks.length / 8));
+  for (let i = 0; i < chunks.length; i += step) {
+    const c = chunks[i];
+    const len = typeof c === "string" ? c.length : c.text.length;
+    if (!selected.includes(c) && totalLen + len <= maxChars) {
+      selected.push(c);
+      totalLen += len;
+    }
+  }
+
+  return selected.map(c => typeof c === "string" ? c : c.text).join("\n\n---\n\n");
 }
 
 const STUDENT_ERROR_MESSAGE = "The study assistant is momentarily busy processing this textbook. Please try again in a few moments.";
@@ -482,9 +527,9 @@ async function handleApiRequest(request, env) {
       if (!file) return errorResponse("Missing file parameter in upload", 400);
 
       const arrayBuffer = await file.arrayBuffer();
-      const { text, pageCount } = await extractTextFromPdfBytes(arrayBuffer);
+      const { text, pageCount, isScanned } = await extractTextFromPdfBytes(arrayBuffer);
 
-      if (!text || text.trim().length < 50) {
+      if (isScanned || !text || text.trim().length < 50) {
         return errorResponse("Unable to extract readable text from this PDF. This document appears to be a scanned image or photo without selectable text. Please upload an OCR-processed or selectable textbook PDF.", 422);
       }
 
@@ -541,15 +586,29 @@ async function handleApiRequest(request, env) {
       const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
+      const representativeText = getRepresentativeContext(doc, 7500);
       const isQuick = path.includes("quick-notes");
       const kind = isQuick ? "quick-notes" : "deep-notes";
 
-      const prompt = `You are an elite educational AI. Create comprehensive, high-quality ${isQuick ? "quick revision bullet notes with formulas and facts" : "in-depth section-by-section study notes"} based on this real textbook content.
+      const prompt = isQuick
+        ? `You are an elite educational AI. Create a high-yield rapid revision sheet based on this textbook content.
 Document: ${doc.filename}
-Textbook Content:
-${doc.text.slice(0, 7000)}
+Textbook Excerpts:
+${representativeText}
 
-Organize into 4 to 8 clear sections with descriptive headings, detailed educational content, and source_pages (e.g. [1]).`;
+Requirements:
+- 4 to 6 concise revision sections with descriptive headings.
+- Include: Essential Formulas with parameter definitions, High-Priority Definitions, Crucial Scientific Distinctions, and Memory Mnemonics.
+- Cite accurate source_pages.`
+        : `You are an elite educational AI and master professor. Create comprehensive, in-depth study notes across all chapters and sections in this textbook.
+Document: ${doc.filename}
+Textbook Excerpts:
+${representativeText}
+
+Requirements:
+- 5 to 8 structured, thorough sections covering the full uploaded content.
+- For each section, provide: Overview, Key Definitions, Visual & Diagram Mechanisms (explicitly explaining any diagrams, figures, or structures in depth), Step-by-Step Mechanisms, Exact Formulas & Units, Worked Examples, and Exam Takeaways.
+- Cite accurate source_pages.`;
 
       const schema = {
         type: "OBJECT",
@@ -583,10 +642,16 @@ Organize into 4 to 8 clear sections with descriptive headings, detailed educatio
       if (!doc) return errorResponse("Document not found", 404);
 
       const count = body.count || 5;
-      const prompt = `Generate ${count} interactive quiz questions based on this textbook content.
+      const representativeText = getRepresentativeContext(doc, 7500);
+      const prompt = `You are an elite educational AI. Generate ${count} authentic interactive quiz questions based on this textbook content.
 Document: ${doc.filename}
-Textbook Content:
-${doc.text.slice(0, 7000)}`;
+Textbook Excerpts:
+${representativeText}
+
+Requirements:
+- Mix multiple_choice, true_false, and short_answer types.
+- Multiple-choice questions MUST have 4 plausible, authentic options testing real conceptual understanding.
+- Provide a clear question, accurate answer, detailed explanation explaining WHY the answer is correct, and valid source_pages.`;
 
       const schema = {
         type: "OBJECT",
@@ -623,10 +688,15 @@ ${doc.text.slice(0, 7000)}`;
       const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
-      const prompt = `Generate 6 to 10 high-yield, active-recall study flashcards based on this textbook content. Each card MUST have a clear "front" (question, key concept, or term to define) and a concise, complete "back" (accurate explanation, formula, or answer).
+      const representativeText = getRepresentativeContext(doc, 7500);
+      const prompt = `You are an elite educational AI. Generate 6 to 12 high-yield, active-recall study flashcards based on this textbook content.
 Document: ${doc.filename}
-Textbook Content:
-${doc.text.slice(0, 7000)}`;
+Textbook Excerpts:
+${representativeText}
+
+Requirements:
+- Varied card types: Definitions, Conceptual "Why/How", Diagram & Mechanism Interpretation, Formula Recall, and Common Misconceptions.
+- Each card MUST have a clear "front" (question, key concept, or term to define) and a concise, complete "back" (accurate explanation, formula, or answer) with valid source_pages.`;
 
       const schema = {
         type: "OBJECT",
@@ -669,8 +739,10 @@ ${doc.text.slice(0, 7000)}`;
       const question = body.question;
       const relevantContext = retrieveRelevantChunks(doc.chunks || [doc.text], question, 6500);
 
-      const prompt = `You are Lumio, an expert educational tutor. Answer the student's question accurately, clearly, and thoroughly based ONLY on the provided textbook excerpt. 
-If the answer is discussed in the excerpt, explain the concepts and formulas in full detail.
+      const prompt = `You are Lumio, an elite, patient personal tutor grounded strictly in the student's uploaded textbook.
+Answer the student's question accurately, clearly, and thoroughly based ONLY on the provided textbook excerpt.
+If the student asks about a diagram, figure, or illustration, explain its visual components, step-by-step mechanism, and relation to the theory.
+Explain mathematical formulas step-by-step with their units.
 If the excerpt does not mention the topic at all, state honestly that the specific topic was not found in the uploaded text.
 
 Student Question: ${question}

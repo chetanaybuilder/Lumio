@@ -262,3 +262,73 @@ def test_oversized_upload_is_rejected_before_pdf_parsing(monkeypatch, tmp_path):
         assert list(tmp_path.iterdir()) == []
     finally:
         app.dependency_overrides.pop(require_session, None)
+
+
+def test_scanned_pdf_upload_is_rejected_with_422(monkeypatch, tmp_path):
+    """A scanned photograph PDF with no selectable text must return 422 with actionable details."""
+    import app.main as main
+
+    monkeypatch.setattr(main, "TEMP_DIR", tmp_path)
+    session = StudySession("test-token", 9999999999)
+    app.dependency_overrides[require_session] = lambda: session
+
+    # Synthesize a scanned PDF (image only, no text)
+    scanned_path = tmp_path / "scanned.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 50, 50), 1)
+    page.insert_image(pymupdf.Rect(50, 50, 200, 200), pixmap=pix)
+    doc.save(str(scanned_path))
+    doc.close()
+
+    try:
+        with TestClient(app) as client:
+            with open(scanned_path, "rb") as f:
+                response = client.post(
+                    "/api/documents/upload",
+                    headers={"X-Session-Token": session.token},
+                    files={"file": ("scanned.pdf", f.read(), "application/pdf")},
+                )
+        assert response.status_code == 422
+        assert "scanned" in response.json()["detail"].lower()
+    finally:
+        app.dependency_overrides.pop(require_session, None)
+
+
+def test_pdf_export_all_materials_integrity():
+    """Verify that export_service generates valid, readable PDFs for all 4 study materials."""
+    from app.export_service import make_pdf
+
+    notes_mat = {
+        "title": "CBSE Chemistry Deep Notes",
+        "sections": [
+            {"heading": "1.1 Atomic Structure", "content": "Electrons orbit the nucleus in quantized energy levels.", "source_pages": [1, 2]},
+            {"heading": "1.2 Chemical Bonding", "content": "Ionic and covalent bonds minimize electrostatic potential energy.", "source_pages": [3]},
+        ],
+    }
+    quiz_mat = {
+        "title": "Chemistry Quiz",
+        "questions": [
+            {
+                "type": "multiple_choice",
+                "question": "What is the bond angle of methane (CH4)?",
+                "options": ["90°", "109.5°", "120°", "180°"],
+                "answer": "109.5°",
+                "explanation": "Methane has sp3 tetrahedral geometry with 109.5° bond angle.",
+                "source_pages": [4],
+            }
+        ],
+    }
+    flashcards_mat = {
+        "title": "Chemistry Flashcards",
+        "cards": [
+            {"front": "Define Aufbau principle", "back": "Electrons fill lower energy orbitals first before higher ones.", "source_pages": [2]}
+        ],
+    }
+
+    for kind, mat in [("deep-notes", notes_mat), ("quick-notes", notes_mat), ("quiz", quiz_mat), ("flashcards", flashcards_mat)]:
+        pdf_bytes = make_pdf(kind, mat)
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 500
+        assert pdf_bytes.startswith(b"%PDF-")
+

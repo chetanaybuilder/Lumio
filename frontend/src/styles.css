@@ -714,4 +714,82 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+/* --- Visual & Diagram Callout Cards --- */
+.diagram-callout-card {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.08), rgba(255, 69, 0, 0.04));
+  border: 1px solid rgba(255, 140, 0, 0.35);
+  border-left: 4px solid #ff7a18;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(255, 122, 24, 0.08);
+}
+.diagram-callout-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #d04b19;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.diagram-callout-icon {
+  font-size: 16px;
+}
+.diagram-callout-body {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-dark, #2b2825);
+  font-weight: 500;
+}
+
+/* --- Formatted Tables in Notes --- */
+.table-responsive-wrapper {
+  overflow-x: auto;
+  margin: 16px 0;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+.anime-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+  background: #ffffff;
+}
+.anime-table th {
+  background: #fdf6ee;
+  color: #8c3210;
+  padding: 10px 14px;
+  font-weight: 700;
+  border-bottom: 2px solid rgba(208, 75, 25, 0.2);
+  white-space: nowrap;
+}
+.anime-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  color: #333333;
+}
+.anime-table tr:hover td {
+  background: rgba(255, 248, 240, 0.6);
+}
+
+/* --- Formatted Lists & Paragraphs --- */
+.formatted-list {
+  margin: 10px 0 10px 20px;
+  padding: 0;
+  line-height: 1.65;
+}
+.formatted-list li {
+  margin-bottom: 6px;
+  color: var(--text-dark, #2b2825);
+}
+.formatted-paragraph {
+  margin: 8px 0;
+  line-height: 1.65;
+}
+
 /* The warm paper and ember accents keep study materials expressive but legible. */

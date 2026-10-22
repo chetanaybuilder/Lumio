@@ -3,24 +3,19 @@ Structure Detector — Lumio Backend
 ===================================
 
 Scans cleaned PDF pages line by line and groups content into logical
-sections based on heuristic heading detection.  Two patterns are
-currently recognized as headings:
+sections based on robust educational heading detection.
 
-1. Lines starting with ``Chapter <number>`` (case-insensitive).
-2. Lines starting with a dotted numeric prefix like ``1.2.3 ...``.
-
-Any content that appears before the first detected heading is placed
-into a default section titled "Document Content".
-
-Each section records its heading text, the page where it begins, and a
-list of ``(page, text)`` content entries.  These sections feed into the
-chunker, which splits them into overlapping windows for embedding.
-
-Limitations
------------
-The detector is purely heuristic.  Headings that do not match the two
-patterns above remain ordinary content lines.  Complex layouts, multi-
-column documents, or non-standard numbering schemes may not be detected.
+Recognized heading patterns:
+1. Chapter / Unit / Module markers:
+   - ``Chapter 1``, ``CHAPTER 12: Atomic Structure``
+   - ``Unit 3``, ``Module 2``, ``Section 4``
+2. Dotted numeric section prefixes:
+   - ``1.1 Introduction``, ``2.3 Covalent Bonding``, ``4.2.1 Hess's Law``
+3. Educational landmark headings:
+   - ``Summary``, ``Key Concepts``, ``Important Formulas``, ``Exercises``
+4. Diagram & Figure structural markers:
+   - ``[FIGURE / DIAGRAM: ...]``
+   - ``[STRUCTURED TABLES (Page ...)]``
 """
 
 import re
@@ -30,18 +25,64 @@ import re
 # Heading detection heuristics
 # ---------------------------------------------------------------------------
 
+_LANDMARK_HEADINGS = {
+    "summary",
+    "key concepts",
+    "core concepts",
+    "review questions",
+    "exercises",
+    "important formulas",
+    "glossary",
+    "conclusions",
+    "practice problems",
+    "learning objectives",
+}
+
+
 def _is_heading(line: str) -> bool:
     """
-    Return ``True`` if *line* matches a recognized heading pattern.
+    Return ``True`` if *line* matches a recognized textbook heading pattern.
 
-    Recognized patterns:
-    - ``Chapter 1``, ``CHAPTER 12``, etc. (case-insensitive).
-    - ``1.2``, ``3.4.5 Title Text``, or any dotted numeric prefix.
+    Heuristics:
+    - Line length must be reasonable for a title (<= 140 characters).
+    - Must not end with a sentence-ending period unless it's a short numbered prefix.
     """
-    return bool(
-        re.match(r"^Chapter\s+\d+", line, re.IGNORECASE)
-        or re.match(r"^\d+(\.\d+)*\s+", line)
-    )
+    line_clean = line.strip()
+    if not line_clean or len(line_clean) > 140:
+        return False
+
+    # Diagram or Table structural markers
+    if line_clean.startswith("[FIGURE / DIAGRAM:") or line_clean.startswith("[STRUCTURED TABLES"):
+        return True
+
+    # Chapter, Unit, Module, Section markers
+    if re.match(r"^(?:Chapter|Unit|Module|Section|Topic)\s+\d+[:\s\-]?", line_clean, re.IGNORECASE):
+        return True
+
+    # Dotted numeric section prefix (e.g. "1.1", "2.3.4 Title", but not a sentence ending in a period like "1. The dog ran.")
+    if re.match(r"^\d+\.\d+(?:\.\d+)*\s+[A-Z]", line_clean):
+        return True
+
+    # Educational landmark sections
+    if line_clean.lower() in _LANDMARK_HEADINGS:
+        return True
+
+    # Roman numeral parts (e.g. "PART I: MECHANICS")
+    if re.match(r"^PART\s+[IVXLCDM]+[:\s]", line_clean, re.IGNORECASE):
+        return True
+
+    # Prominent all-caps short title (between 4 and 60 chars, no terminal period)
+    if (
+        len(line_clean) >= 4
+        and len(line_clean) <= 60
+        and line_clean.isupper()
+        and not line_clean.endswith(".")
+        and any(c.isalpha() for c in line_clean)
+        and not line_clean.startswith("PAGE ")
+    ):
+        return True
+
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -55,8 +96,7 @@ def detect_structure(pages: list) -> list:
     Parameters
     ----------
     pages : list[dict]
-        Cleaned pages, each containing ``"page"`` (int) and ``"text"``
-        (str).
+        Cleaned pages, each containing ``"page"`` (int) and ``"text"`` (str).
 
     Returns
     -------
@@ -74,37 +114,30 @@ def detect_structure(pages: list) -> list:
         text = page["text"]
 
         for line in text.splitlines():
-            line = line.strip()
+            line_str = line.strip()
 
-            # Skip blank lines — they carry no structural information.
-            if not line:
+            if not line_str:
                 continue
 
-            if _is_heading(line):
-                # Start a new section whenever a heading is found.
+            if _is_heading(line_str):
                 current_section = {
-                    "heading": line,
+                    "heading": line_str,
                     "start_page": page_number,
                     "content": [],
                 }
                 sections.append(current_section)
             else:
-                # Create a default section for content before any heading.
                 if current_section is None:
                     current_section = {
-                        "heading": "Document Content",
+                        "heading": "Document Overview",
                         "start_page": page_number,
                         "content": [],
                     }
                     sections.append(current_section)
 
-                # Append the content line to the active section.
                 current_section["content"].append({
                     "page": page_number,
-                    "text": line,
+                    "text": line_str,
                 })
 
     return sections
-
-
-# Structure detection is heuristic; unrecognized headings stay as content.
