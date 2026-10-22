@@ -52,6 +52,9 @@ async function request(path, token, options = {}) {
     if (response.status === 401) {
       throw new Error("Your study session has expired or is invalid. Please start a fresh session.")
     }
+    if (response.status === 422) {
+      throw new Error(detail || "Unable to extract readable text from this PDF. This document may be a scanned image or photo without selectable text. Please upload an OCR-processed or selectable textbook.")
+    }
     if (response.status >= 500) {
       throw new Error(detail || "The service is temporarily busy processing materials. Please retry in a few moments.")
     }

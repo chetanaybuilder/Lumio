@@ -135,15 +135,24 @@ function decodeHexPdfString(hex) {
   let clean = hex.replace(/\s+/g, "");
   if (clean.length % 2 !== 0) clean += "0";
   let out = "";
-  for (let i = 0; i < clean.length; i += 2) {
-    const code = parseInt(clean.substr(i, 2), 16);
-    if (code >= 32 && code <= 126) out += String.fromCharCode(code);
-    else if (code === 10 || code === 13 || code === 9) out += " ";
+  // Check if UTF-16BE (e.g. 00410042)
+  if (clean.length >= 4 && clean.substr(0, 2) === "00") {
+    for (let i = 0; i < clean.length; i += 4) {
+      const code = parseInt(clean.substr(i, 4), 16);
+      if (!isNaN(code) && code >= 32 && code <= 126) out += String.fromCharCode(code);
+      else if (code === 10 || code === 13 || code === 9) out += " ";
+    }
+  } else {
+    for (let i = 0; i < clean.length; i += 2) {
+      const code = parseInt(clean.substr(i, 2), 16);
+      if (!isNaN(code) && code >= 32 && code <= 126) out += String.fromCharCode(code);
+      else if (code === 10 || code === 13 || code === 9) out += " ";
+    }
   }
   return out;
 }
 
-// High-precision, high-speed PDF text and page extractor with image stream filtering
+// High-precision, high-speed PDF text and page extractor with robust stream matching
 async function extractTextFromPdfBytes(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
   const rawStr = new TextDecoder("latin1").decode(bytes);
@@ -155,23 +164,19 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   }
 
   let fullText = "";
-  let i = 0;
   const maxChars = 150000;
+  const streamRegex = /[\r\n>]stream(?:\r\n|\n)/g;
+  let sm;
 
-  while (i < rawStr.length && fullText.length < maxChars) {
-    const streamIndex = rawStr.indexOf("stream", i);
-    if (streamIndex === -1) break;
+  while ((sm = streamRegex.exec(rawStr)) !== null && fullText.length < maxChars) {
+    const streamStart = sm.index;
+    const dataStart = streamRegex.lastIndex;
+    const headerStart = Math.max(0, streamStart - 400);
+    const headerStr = rawStr.slice(headerStart, streamStart);
 
-    const headerStart = Math.max(0, streamIndex - 400);
-    const headerStr = rawStr.slice(headerStart, streamIndex);
-
-    // Skip large image bitmaps and binary fonts to prevent memory bloat and CPU timeouts
-    const isImage = headerStr.includes("/Subtype /Image") || headerStr.includes("/Subtype/Image") || headerStr.includes("/Image") || headerStr.includes("/DCTDecode") || headerStr.includes("/JPXDecode");
+    // Skip true image bitmaps and binary font streams (never match loose "/Image" which matches "/ProcSet [/PDF /Text /ImageB]")
+    const isImage = headerStr.includes("/Subtype /Image") || headerStr.includes("/Subtype/Image") || headerStr.includes("/DCTDecode") || headerStr.includes("/JPXDecode") || headerStr.includes("/JBIG2Decode");
     const isFont = headerStr.includes("/Type /Font") || headerStr.includes("/Type/Font") || headerStr.includes("/FontDescriptor");
-
-    let dataStart = streamIndex + 6;
-    if (rawStr.charCodeAt(dataStart) === 13) dataStart++;
-    if (rawStr.charCodeAt(dataStart) === 10) dataStart++;
 
     const endStream = rawStr.indexOf("endstream", dataStart);
     if (endStream === -1) break;
@@ -229,10 +234,15 @@ async function extractTextFromPdfBytes(arrayBuffer) {
           fullText += decodeHexPdfString(m[1]) + " ";
           if (fullText.length >= maxChars) break;
         }
+
+        // Single and double quote operators (...) ' and aw ac (...) "
+        const quoteRegex = /\((.*?)\)\s*['"]/g;
+        while ((m = quoteRegex.exec(decodedStr)) !== null) {
+          fullText += cleanPdfString(m[1]) + " ";
+          if (fullText.length >= maxChars) break;
+        }
       }
     }
-
-    i = endStream + 9;
   }
 
   // Fallback for uncompressed streams or raw text
@@ -261,7 +271,8 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   }
 
   const cleaned = fullText.replace(/\s+/g, " ").trim();
-  return { text: cleaned || rawStr.replace(/[^\x20-\x7E\n]/g, " ").slice(0, 40000), pageCount };
+  // Return cleaned text without falling back to binary PDF metadata
+  return { text: cleaned, pageCount };
 }
 
 // Intelligent TF-IDF / Keyword Context Retrieval for Ask Lumio RAG
@@ -480,6 +491,10 @@ export async function onRequest(context) {
 
       const arrayBuffer = await file.arrayBuffer();
       const { text, pageCount } = await extractTextFromPdfBytes(arrayBuffer);
+
+      if (!text || text.trim().length < 50) {
+        return errorResponse("Unable to extract readable text from this PDF. This document appears to be a scanned image or photo without selectable text. Please upload an OCR-processed or selectable textbook PDF.", 422);
+      }
 
       const docId = crypto.randomUUID().replace(/-/g, "");
       const chunks = [];
