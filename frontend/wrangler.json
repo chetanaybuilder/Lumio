@@ -1,9 +1,10 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "lumio-study",
   "pages_build_output_dir": "dist",
   "compatibility_date": "2026-10-21",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "ai": {
     "binding": "AI"
   },

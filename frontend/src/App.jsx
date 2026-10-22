@@ -7,21 +7,18 @@
  *
  * - **Session lifecycle** — automatic creation, restoration from
  *   `sessionStorage`, and explicit reset ("Start fresh").
- * - **PDF upload** — drag-and-drop or file picker, with real-time
- *   status feedback.
+ * - **PDF upload** — drag-and-drop or file picker, large PDF support,
+ *   client-side size validation, sample textbook loader.
  * - **Study tools** — deep notes, quick notes, quiz lab, flashcards,
  *   and Ask Lumio chat, each rendered by a dedicated panel component.
  * - **PDF export** — download any generated material as a styled PDF.
- *
- * State is intentionally kept in a single component to avoid prop-
- * drilling complexity in this focused, single-page study workspace.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import {
   BookOpenText, BrainCircuit, Check, ChevronLeft, ChevronRight, CircleHelp,
   Download, FileText, Flame, Layers3, LoaderCircle, Mail, MessageCircle, RotateCcw,
-  Send, Shuffle, Sparkles, Upload, X,
+  Send, Shuffle, Sparkles, Trash2, Upload, X,
 } from 'lucide-react'
 import { closeSession, createSession, exportPdf, generate, getDocument, uploadDocument } from './api.js'
 
@@ -60,6 +57,7 @@ export default function App() {
   const [materials, setMaterials] = useState({})
   const [loading, setLoading] = useState('Starting your private study space…')
   const [error, setError] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
 
   // --- Chat state ---
   const [chat, setChat] = useState([])
@@ -101,7 +99,6 @@ export default function App() {
           return
         }
       } catch {
-        // Stale session — clear and create a fresh one below.
         sessionStorage.removeItem('lumio-session')
         sessionStorage.removeItem('lumio-document')
       }
@@ -135,7 +132,7 @@ export default function App() {
   // -------------------------------------------------------------------------
   async function resetSession() {
     setError('')
-    try { if (token) await closeSession(token) } catch { /* expiry cleanup remains server-side */ }
+    try { if (token) await closeSession(token) } catch { /* cleanup is automatic */ }
     sessionStorage.removeItem('lumio-session')
     sessionStorage.removeItem('lumio-document')
     setToken('')
@@ -156,16 +153,23 @@ export default function App() {
   }
 
   // -------------------------------------------------------------------------
-  // File upload handler
+  // File upload handler (with large PDF support & size validation)
   // -------------------------------------------------------------------------
   async function onFile(file) {
     if (!file || !token) return
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setError('Choose a PDF textbook to continue.')
+      setError('Please select a valid PDF textbook file to continue.')
       return
     }
+    if (file.size > 25 * 1024 * 1024) {
+      setError('This textbook exceeds the 20 MB size limit. Please choose a specific chapter or document under 20 MB.')
+      return
+    }
+
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
     setError('')
-    setLoading('Reading your textbook and preparing its pages…')
+    setLoading(`Reading "${file.name}" (${sizeMb} MB) and preparing pages…`)
+
     try {
       const uploaded = await uploadDocument(token, file)
       setDocument(uploaded)
@@ -175,6 +179,25 @@ export default function App() {
     } catch (reason) {
       setError(reason.message)
     } finally {
+      setLoading('')
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Sample textbook loader (instant test)
+  // -------------------------------------------------------------------------
+  async function loadSampleTextbook() {
+    if (!token) return
+    setError('')
+    setLoading('Loading CBSE Chemistry textbook sample (16 pages)…')
+    try {
+      const res = await fetch('/Chemistry_Textbook_CBSE.pdf')
+      if (!res.ok) throw new Error('Sample textbook not found')
+      const blob = await res.blob()
+      const sampleFile = new File([blob], 'Chemistry_Textbook_CBSE.pdf', { type: 'application/pdf' })
+      await onFile(sampleFile)
+    } catch (reason) {
+      setError('Could not load sample textbook: ' + reason.message)
       setLoading('')
     }
   }
@@ -223,9 +246,9 @@ export default function App() {
   // -------------------------------------------------------------------------
   // Chat — send a question to Ask Lumio
   // -------------------------------------------------------------------------
-  async function sendQuestion(event) {
-    event.preventDefault()
-    const question = chatInput.trim()
+  async function sendQuestion(event, customQuestion = null) {
+    if (event) event.preventDefault()
+    const question = (customQuestion || chatInput).trim()
     if (!question || busyChat) return
     setChatInput('')
     setChat((current) => [...current, { role: 'student', content: question }])
@@ -324,12 +347,18 @@ export default function App() {
             <div className="welcome-copy">
               <div className="eyebrow"><span className="eyebrow-line" /> YOUR FOCUS, AMPLIFIED</div>
               <h1>Turn pages into<br /><em>aha</em> moments.</h1>
-              <p>Bring a textbook. Leave with a study plan that actually feels like yours.</p>
+              <p>Bring a textbook. Leave with structured notes, active recall flashcards, and grounded explanations.</p>
             </div>
             <div
-              className="upload-panel"
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => { event.preventDefault(); onFile(event.dataTransfer.files[0]) }}
+              className={`upload-panel ${isDragging ? 'is-dragging' : ''}`}
+              onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }}
+              onDragEnter={(event) => { event.preventDefault(); setIsDragging(true) }}
+              onDragLeave={(event) => { event.preventDefault(); setIsDragging(false) }}
+              onDrop={(event) => {
+                event.preventDefault()
+                setIsDragging(false)
+                if (event.dataTransfer.files?.[0]) onFile(event.dataTransfer.files[0])
+              }}
             >
               <div className="upload-art">
                 <span className="orbit orbit-one" />
@@ -338,27 +367,41 @@ export default function App() {
                 <span className="sparkle sparkle-one">✦</span>
                 <span className="sparkle sparkle-two">✳</span>
               </div>
-              <h2>Drop your textbook here</h2>
-              <p>PDF only · Up to 20 MB · Up to 500 pages</p>
+              <h2>{isDragging ? 'Release to upload PDF' : 'Drop your textbook here'}</h2>
+              <p>PDF only · Up to 20 MB · Up to 500 pages · Fast Edge OCR</p>
               <button className="primary-button" disabled={!token || loadingWorkspace} onClick={() => fileInput.current?.click()}>
                 {loadingWorkspace ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}
-                {loadingWorkspace ? 'Getting things ready' : 'Choose a PDF'}
+                {loadingWorkspace ? 'Processing textbook…' : 'Choose a PDF'}
               </button>
               <input ref={fileInput} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => onFile(event.target.files[0])} />
+
+              {/* Sample textbook quick-loader */}
+              <div className="sample-loader">
+                <span className="sample-divider">or explore immediately</span>
+                <button
+                  type="button"
+                  className="sample-badge-btn"
+                  onClick={loadSampleTextbook}
+                  disabled={!token || loadingWorkspace}
+                >
+                  <Sparkles size={14} /> Try sample: CBSE Chemistry Textbook (16 pages)
+                </button>
+              </div>
+
               {loadingWorkspace && token && (
                 <div className="upload-status" role="status" aria-live="polite">
                   <LoaderCircle className="spin" size={15} />{loading}
                 </div>
               )}
               <div className="upload-assurance">
-                <span>01</span> Private by design <i /> <span>02</span> No account needed
+                <span>01</span> Private by design <i /> <span>02</span> No account needed <i /> <span>03</span> Groq LPU powered
               </div>
             </div>
             <div className="how-row">
               <span className="how-title">A little less cramming.<br /><b>A lot more clarity.</b></span>
-              <div><span className="step-no">01</span><b>Bring your book</b><small>Start with the PDF you have.</small></div>
+              <div><span className="step-no">01</span><b>Bring your book</b><small>Start with any textbook PDF.</small></div>
               <div><span className="step-no">02</span><b>Pick your rhythm</b><small>Notes, quizzes, cards, or chat.</small></div>
-              <div><span className="step-no">03</span><b>Make it stick</b><small>Study the way you learn best.</small></div>
+              <div><span className="step-no">03</span><b>Make it stick</b><small>Study with page-cited evidence.</small></div>
             </div>
           </section>
 
@@ -388,11 +431,22 @@ export default function App() {
 
             {/* Study tool panels */}
             {!loadingWorkspace && view === 'chat' && (
-              <ChatPanel chat={chat} chatInput={chatInput} setChatInput={setChatInput} onSubmit={sendQuestion} busy={busyChat} chatEnd={chatEnd} />
+              <ChatPanel
+                chat={chat}
+                chatInput={chatInput}
+                setChatInput={setChatInput}
+                onSubmit={sendQuestion}
+                onAsk={sendQuestion}
+                onClear={() => setChat([])}
+                busy={busyChat}
+                chatEnd={chatEnd}
+              />
             )}
             {!loadingWorkspace && (view === 'deep-notes' || view === 'quick-notes') && (
               <NotesPanel
                 material={materials[view]}
+                onGenerate={() => openTool(view)}
+                actionLabel={`Generate ${view === 'deep-notes' ? 'deep notes' : 'quick notes'}`}
                 onCopy={() => navigator.clipboard?.writeText(
                   materials[view]?.sections?.map((item) => `${item.heading}\n${item.content}`).join('\n\n') || ''
                 )}
@@ -405,6 +459,7 @@ export default function App() {
                 setAnswers={setQuizAnswers}
                 submitted={quizSubmitted}
                 setSubmitted={setQuizSubmitted}
+                onGenerate={() => openTool('quiz')}
                 onRestart={() => { setQuizAnswers({}); setQuizSubmitted(false) }}
               />
             )}
@@ -415,6 +470,7 @@ export default function App() {
                 setIndex={setCardIndex}
                 flipped={flipped}
                 setFlipped={setFlipped}
+                onGenerate={() => openTool('flashcards')}
                 onShuffle={() => {
                   const cards = [...(materials.flashcards?.cards || [])]
                   for (let i = cards.length - 1; i > 0; i--) {
@@ -439,22 +495,25 @@ export default function App() {
 // NOTES PANEL — Anime-bordered colorful study notes
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Renders generated study notes with colorful anime-style borders,
- * decorative corner accents, and vibrant section styling.
- *
- * @param {object}   props.material - The generated notes data.
- * @param {function} props.onCopy   - Callback to copy notes to clipboard.
- */
-function NotesPanel({ material, onCopy }) {
+function NotesPanel({ material, onCopy, onGenerate, actionLabel }) {
+  const [copied, setCopied] = useState(false)
+
   if (!material) {
     return (
       <EmptyMaterial
         icon={Sparkles}
         title="Your notes are one tap away"
-        detail="Lumio will shape the textbook into clear, sourced study notes."
+        detail="Lumio will structure your textbook into clear, sourced study sections with key formulas and concepts."
+        onGenerate={onGenerate}
+        actionLabel={actionLabel}
       />
     )
+  }
+
+  const handleCopy = () => {
+    onCopy()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   /** Accent color palette for anime-style section borders */
@@ -467,17 +526,28 @@ function NotesPanel({ material, onCopy }) {
     { border: '#FF69B4', bg: 'rgba(255,105,180,0.06)', glow: 'rgba(255,105,180,0.2)', emoji: '🎀' },
   ]
 
+  const sections = material.sections || []
+
   return (
     <div className="notes-layout">
-      {/* Side index navigation */}
+      {/* Side index navigation with smooth scroll */}
       <aside className="notes-index">
         <span>IN THIS GUIDE</span>
-        {material.sections.map((section, index) => (
-          <a key={`${section.heading}-${index}`} href={`#note-${index}`}>
+        {sections.map((section, index) => (
+          <a
+            key={`${section.heading}-${index}`}
+            href={`#note-${index}`}
+            onClick={(e) => {
+              e.preventDefault()
+              document.getElementById(`note-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }}
+          >
             {String(index + 1).padStart(2, '0')} <b>{section.heading}</b>
           </a>
         ))}
-        <button className="text-action" onClick={onCopy}><FileText size={15} /> Copy notes</button>
+        <button className="text-action copy-action-btn" onClick={handleCopy}>
+          {copied ? <><Check size={15} color="#3d7a51" /> Copied to clipboard!</> : <><FileText size={15} /> Copy notes</>}
+        </button>
       </aside>
 
       {/* Anime-bordered notes paper */}
@@ -492,12 +562,12 @@ function NotesPanel({ material, onCopy }) {
         {/* Header */}
         <div className="paper-topline anime-topline">
           <span><Sparkles size={14} /> ✨ LUMIO STUDY GUIDE ✨</span>
-          <span>🌟 {material.sections.length} SECTIONS</span>
+          <span>🌟 {sections.length} SECTIONS</span>
         </div>
         <h2 className="anime-title">{material.title}</h2>
 
         {/* Note sections with colorful anime borders */}
-        {material.sections.map((section, index) => {
+        {sections.map((section, index) => {
           const accent = accentColors[index % accentColors.length]
           return (
             <section
@@ -510,7 +580,6 @@ function NotesPanel({ material, onCopy }) {
                 '--anime-glow': accent.glow,
               }}
             >
-              {/* Decorative anime badge */}
               <div className="anime-badge" style={{ background: accent.border }}>
                 {accent.emoji}
               </div>
@@ -547,106 +616,119 @@ function NotesPanel({ material, onCopy }) {
 // QUIZ PANEL
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Interactive quiz with answer selection, submission, and scoring.
- *
- * @param {object}   props.quiz        - The generated quiz data.
- * @param {object}   props.answers     - Current answer selections by index.
- * @param {function} props.setAnswers  - State setter for answers.
- * @param {boolean}  props.submitted   - Whether answers have been submitted.
- * @param {function} props.setSubmitted - State setter for submission flag.
- * @param {function} props.onRestart   - Reset quiz to try again.
- */
-function QuizPanel({ quiz, answers, setAnswers, submitted, setSubmitted, onRestart }) {
+function QuizPanel({ quiz, answers, setAnswers, submitted, setSubmitted, onRestart, onGenerate }) {
   if (!quiz) {
     return (
       <EmptyMaterial
         icon={CircleHelp}
         title="Make recall your superpower"
-        detail="Build a textbook-based quiz, then check your answers and explanations."
+        detail="Generate an interactive practice quiz with multiple-choice, true/false, and short-answer questions grounded in your textbook."
+        onGenerate={onGenerate}
+        actionLabel="Generate quiz lab"
       />
     )
   }
 
-  // Calculate the score after submission.
-  const score = quiz.questions.filter(
-    (item, index) => (answers[index] || '').trim().toLowerCase() === item.answer.trim().toLowerCase()
+  const questions = quiz.questions || []
+  const answeredCount = Object.keys(answers).length
+  const score = questions.filter(
+    (item, index) => (answers[index] || '').trim().toLowerCase() === (item.answer || '').trim().toLowerCase()
   ).length
 
   return (
     <div className="quiz-wrap">
-      {/* Toolbar showing question count and score */}
+      {/* Toolbar showing question count and progress */}
       <div className="quiz-toolbar">
-        <span>{quiz.questions.length} QUESTIONS <i /> ANSWER AT YOUR OWN PACE</span>
+        <span>{questions.length} QUESTIONS <i /> {submitted ? `COMPLETED` : `${answeredCount} OF ${questions.length} ANSWERED`}</span>
         {submitted
-          ? <span className="score-label">SCORE <b>{score}/{quiz.questions.length}</b></span>
+          ? <span className="score-label">FINAL SCORE: <b>{score}/{questions.length}</b></span>
           : <button className="text-action" onClick={onRestart}><RotateCcw size={15} /> Reset</button>
         }
       </div>
 
+      {/* Submitted Score Summary Celebration */}
+      {submitted && (
+        <div className="quiz-result-banner">
+          <div className="score-badge">
+            <strong>{score} / {questions.length}</strong>
+            <span>{Math.round((score / (questions.length || 1)) * 100)}% Score</span>
+          </div>
+          <div className="score-feedback">
+            <h4>{score === questions.length ? '🌟 Perfect score! Flawless recall!' : score >= questions.length * 0.75 ? '🎉 Great job! Solid understanding!' : '💪 Good effort! Review explanations below:'}</h4>
+            <p>{score === questions.length ? 'You mastered every question in this textbook quiz.' : 'Check the detailed source-page explanations for any concepts you missed.'}</p>
+          </div>
+        </div>
+      )}
+
       {/* Question list */}
       <div className="question-list">
-        {quiz.questions.map((item, index) => (
-          <article className="question-block" key={`${index}-${item.question}`}>
-            <div className="question-meta">
-              <span>QUESTION {String(index + 1).padStart(2, '0')}</span>
-              <span className={`difficulty difficulty-${item.difficulty}`}>{item.difficulty}</span>
-            </div>
-            <h3>{item.question}</h3>
+        {questions.map((item, index) => {
+          const rawOptions = item.type === 'true_false' ? ['True', 'False'] : (item.options || [])
+          const isCorrect = (answers[index] || '').trim().toLowerCase() === (item.answer || '').trim().toLowerCase()
 
-            {/* Multiple choice / true-false options */}
-            {item.type === 'multiple_choice' || item.type === 'true_false' ? (
-              <div className="answer-options">
-                {(item.type === 'true_false' ? ['True', 'False'] : item.options).map((option) => {
-                  const chosen = answers[index] === option
-                  const correct = option.toLowerCase() === item.answer.toLowerCase()
-                  return (
-                    <button
-                      key={option}
-                      className={`answer-option ${chosen ? 'chosen' : ''} ${submitted && correct ? 'correct' : ''} ${submitted && chosen && !correct ? 'incorrect' : ''}`}
-                      onClick={() => !submitted && setAnswers((current) => ({ ...current, [index]: option }))}
-                      disabled={submitted}
-                    >
-                      <span className="option-mark">
-                        {submitted && correct
-                          ? <Check size={14} />
-                          : String.fromCharCode(65 + (item.type === 'true_false' ? ['True', 'False'].indexOf(option) : item.options.indexOf(option)))
-                        }
-                      </span>
-                      {option}
-                    </button>
-                  )
-                })}
+          return (
+            <article className={`question-block ${submitted ? (isCorrect ? 'block-correct' : 'block-incorrect') : ''}`} key={`${index}-${item.question}`}>
+              <div className="question-meta">
+                <span>QUESTION {String(index + 1).padStart(2, '0')}</span>
+                <span className={`difficulty difficulty-${item.difficulty || 'medium'}`}>{item.difficulty || 'medium'}</span>
+                {item.source_pages?.length > 0 && <span className="quiz-source-tag">P. {item.source_pages.join(', ')}</span>}
               </div>
-            ) : (
-              /* Short answer input */
-              <input
-                className="short-answer"
-                disabled={submitted}
-                value={answers[index] || ''}
-                onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
-                placeholder="Write a short answer"
-              />
-            )}
+              <h3>{item.question}</h3>
 
-            {/* Explanation shown after submission */}
-            {submitted && (
-              <div className="explanation">
-                <b>{(answers[index] || '').trim().toLowerCase() === item.answer.trim().toLowerCase()
-                  ? 'That\u2019s right.'
-                  : `Answer: ${item.answer}`}</b>
-                <span>{item.explanation}</span>
-              </div>
-            )}
-          </article>
-        ))}
+              {/* Multiple choice / true-false options */}
+              {item.type === 'multiple_choice' || item.type === 'true_false' ? (
+                <div className="answer-options">
+                  {rawOptions.map((option) => {
+                    const chosen = answers[index] === option
+                    const correct = option.toLowerCase() === (item.answer || '').toLowerCase()
+                    return (
+                      <button
+                        key={option}
+                        className={`answer-option ${chosen ? 'chosen' : ''} ${submitted && correct ? 'correct' : ''} ${submitted && chosen && !correct ? 'incorrect' : ''}`}
+                        onClick={() => !submitted && setAnswers((current) => ({ ...current, [index]: option }))}
+                        disabled={submitted}
+                      >
+                        <span className="option-mark">
+                          {submitted && correct
+                            ? <Check size={14} />
+                            : (submitted && chosen && !correct
+                              ? <X size={14} />
+                              : String.fromCharCode(65 + rawOptions.indexOf(option)))
+                          }
+                        </span>
+                        {option}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* Short answer input */
+                <input
+                  className={`short-answer ${submitted ? (isCorrect ? 'input-correct' : 'input-incorrect') : ''}`}
+                  disabled={submitted}
+                  value={answers[index] || ''}
+                  onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
+                  placeholder="Type your short answer here…"
+                />
+              )}
+
+              {/* Explanation shown after submission */}
+              {submitted && (
+                <div className={`explanation ${isCorrect ? 'exp-correct' : 'exp-incorrect'}`}>
+                  <b>{isCorrect ? '✓ Correct answer!' : `Expected answer: ${item.answer}`}</b>
+                  <span>{item.explanation}</span>
+                </div>
+              )}
+            </article>
+          )
+        })}
       </div>
 
       {/* Submit / retry footer */}
       <div className="quiz-footer">
         {submitted
-          ? <button className="primary-button" onClick={onRestart}><RotateCcw size={16} /> Try again</button>
-          : <button className="primary-button" onClick={() => setSubmitted(true)}><Check size={16} /> Check answers</button>
+          ? <button className="primary-button" onClick={onRestart}><RotateCcw size={16} /> Try quiz again</button>
+          : <button className="primary-button" onClick={() => setSubmitted(true)} disabled={answeredCount === 0}><Check size={16} /> Check answers ({answeredCount}/{questions.length})</button>
         }
       </div>
     </div>
@@ -655,67 +737,81 @@ function QuizPanel({ quiz, answers, setAnswers, submitted, setSubmitted, onResta
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASHCARD PANEL
+// FLASHCARD PANEL (with Keyboard Controls)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Interactive flashcard deck with flip, navigate, shuffle, and restart.
- *
- * @param {object}   props.deck      - The generated flashcard deck data.
- * @param {number}   props.index     - Current card index.
- * @param {function} props.setIndex  - State setter for card index.
- * @param {boolean}  props.flipped   - Whether the current card is flipped.
- * @param {function} props.setFlipped - State setter for flip state.
- * @param {function} props.onShuffle - Randomize the card order.
- */
-function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle }) {
+function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle, onGenerate }) {
   const cardList = Array.isArray(deck?.cards) ? deck.cards : (Array.isArray(deck?.flashcards) ? deck.flashcards : [])
+
+  const safeIndex = Math.min(Math.max(0, index), Math.max(0, cardList.length - 1))
+  const card = cardList[safeIndex] || cardList[0]
+
+  const move = (direction) => {
+    if (!cardList.length) return
+    setIndex((safeIndex + direction + cardList.length) % cardList.length)
+    setFlipped(false)
+  }
+
+  // Keyboard navigation for power studying
+  useEffect(() => {
+    if (!cardList.length) return
+    function handleKeyDown(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.code === 'Space' || e.key === 'Enter') {
+        e.preventDefault()
+        setFlipped((f) => !f)
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        move(1)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        move(-1)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [safeIndex, cardList.length])
 
   if (!cardList.length) {
     return (
       <EmptyMaterial
         icon={Layers3}
         title="Small cards. Big recall."
-        detail="Generate a focused deck from your textbook, then move through it at your pace."
+        detail="Generate a focused active-recall deck from your textbook, then practice through it at your own speed."
+        onGenerate={onGenerate}
+        actionLabel="Generate flashcard deck"
       />
     )
-  }
-
-  const safeIndex = Math.min(Math.max(0, index), cardList.length - 1)
-  const card = cardList[safeIndex] || cardList[0]
-  const move = (direction) => {
-    setIndex((safeIndex + direction + cardList.length) % cardList.length)
-    setFlipped(false)
   }
 
   return (
     <div className="flashcard-stage">
       <div className="flashcard-toolbar">
-        <span>DECK <b>{deck.title}</b></span>
+        <span>DECK: <b>{deck.title || 'Textbook Recall Deck'}</b></span>
         <div>
           <button className="text-action" onClick={onShuffle}><Shuffle size={15} /> Shuffle</button>
           <button className="text-action" onClick={() => { setIndex(0); setFlipped(false) }}><RotateCcw size={15} /> Restart</button>
         </div>
       </div>
 
-      {/* Flashcard with flip animation */}
+      {/* Flashcard with 3D flip animation */}
       <button
         className={`flashcard ${flipped ? 'is-flipped' : ''}`}
         onClick={() => setFlipped(!flipped)}
         aria-label={flipped ? 'Show question' : 'Reveal answer'}
       >
         <span className="flashcard-corner" />
-        <span className="card-kicker">{flipped ? 'THE ANSWER' : 'QUICK RECALL'}</span>
-        <strong>{flipped ? card.back : card.front}</strong>
-        <span className="flip-hint">Tap to {flipped ? 'see question' : 'reveal answer'}</span>
-        {card.source_pages?.length > 0 && flipped && (
+        <span className="card-kicker">{flipped ? '✓ THE ANSWER' : '⚡ QUICK RECALL'}</span>
+        <strong>{flipped ? (card?.back || '') : (card?.front || '')}</strong>
+        <span className="flip-hint">Tap or press <kbd>Space</kbd> to {flipped ? 'see question' : 'reveal answer'}</span>
+        {card?.source_pages?.length > 0 && flipped && (
           <span className="card-source">SOURCE · P. {card.source_pages.join(', ')}</span>
         )}
       </button>
 
-      {/* Navigation controls */}
+      {/* Navigation controls & progress */}
       <div className="card-controls">
-        <button className="circle-control" onClick={() => move(-1)} title="Previous card"><ChevronLeft size={20} /></button>
+        <button className="circle-control" onClick={() => move(-1)} title="Previous card (Left Arrow)"><ChevronLeft size={20} /></button>
         <div className="card-progress">
           <b>{String(safeIndex + 1).padStart(2, '0')}</b>
           <span> / {String(cardList.length).padStart(2, '0')}</span>
@@ -723,7 +819,14 @@ function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle 
             <span style={{ width: `${((safeIndex + 1) / cardList.length) * 100}%` }} />
           </div>
         </div>
-        <button className="circle-control" onClick={() => move(1)} title="Next card"><ChevronRight size={20} /></button>
+        <button className="circle-control" onClick={() => move(1)} title="Next card (Right Arrow)"><ChevronRight size={20} /></button>
+      </div>
+
+      {/* Helpful keyboard shortcut guide */}
+      <div className="keyboard-hints">
+        <span><kbd>Space</kbd> Flip card</span>
+        <span><kbd>→</kbd> Next card</span>
+        <span><kbd>←</kbd> Previous card</span>
       </div>
     </div>
   )
@@ -731,32 +834,46 @@ function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle 
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CHAT PANEL
+// CHAT PANEL (with interactive suggestions & clear chat)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Conversational chat interface for Ask Lumio — textbook-grounded Q&A.
- *
- * @param {array}    props.chat         - Message history.
- * @param {string}   props.chatInput    - Current input value.
- * @param {function} props.setChatInput - State setter for input.
- * @param {function} props.onSubmit     - Form submit handler.
- * @param {boolean}  props.busy         - Whether a response is pending.
- * @param {object}   props.chatEnd      - Ref for auto-scroll target.
- */
-function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
+function ChatPanel({ chat, chatInput, setChatInput, onSubmit, onAsk, onClear, busy, chatEnd }) {
+  const sampleSuggestions = [
+    "What are the core concepts and principles?",
+    "Explain the most important formulas with examples",
+    "Summarize the key takeaways for exam revision",
+    "What are common mistakes or misconceptions in this chapter?"
+  ]
+
   return (
     <div className="chat-shell">
+      {chat.length > 0 && (
+        <div className="chat-top-actions">
+          <span>GROUNDED STUDY CONVERSATION</span>
+          <button type="button" className="clear-chat-btn" onClick={onClear} title="Clear conversation history">
+            <Trash2 size={13} /> Clear chat
+          </button>
+        </div>
+      )}
+
       <div className="chat-messages">
-        {/* Empty state with suggested questions */}
+        {/* Empty state with interactive suggestion buttons */}
         {chat.length === 0 && (
           <div className="chat-empty">
             <div className="chat-orbit"><BrainCircuit size={28} /></div>
             <h2>Let&apos;s untangle something.</h2>
-            <p>Ask about a concept, a connection, or a page that deserves a second look.</p>
+            <p>Ask about a concept, a formula, or a page that deserves a second look.</p>
             <div className="suggestions">
-              <span>&ldquo;What are the key ideas?&rdquo;</span>
-              <span>&ldquo;Explain this in simpler terms&rdquo;</span>
+              {sampleSuggestions.map((sug) => (
+                <button
+                  type="button"
+                  key={sug}
+                  className="suggestion-chip-btn"
+                  onClick={() => onAsk(null, sug)}
+                >
+                  &ldquo;{sug}&rdquo;
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -768,10 +885,10 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
               {message.role === 'lumio' ? <Sparkles size={15} /> : 'Y'}
             </span>
             <div>
-              <div className="message-author">{message.role === 'lumio' ? 'LUMIO' : 'YOU'}</div>
+              <div className="message-author">{message.role === 'lumio' ? 'LUMIO TUTOR' : 'YOU'}</div>
               <p>{message.content || message.answer}</p>
               {message.source_pages?.length > 0 && (
-                <div className="chat-sources">TEXTBOOK · PAGES {message.source_pages.join(', ')}</div>
+                <div className="chat-sources">📖 TEXTBOOK CITATION · PAGES {message.source_pages.join(', ')}</div>
               )}
             </div>
           </div>
@@ -782,7 +899,7 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
           <div className="chat-message lumio">
             <span className="message-avatar"><Sparkles size={15} /></span>
             <div>
-              <div className="message-author">LUMIO</div>
+              <div className="message-author">LUMIO TUTOR</div>
               <p className="thinking"><i /><i /><i /></p>
             </div>
           </div>
@@ -796,7 +913,7 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
         <textarea
           value={chatInput}
           onChange={(event) => setChatInput(event.target.value)}
-          placeholder="Ask something about your textbook…"
+          placeholder="Ask anything about your textbook (press Enter to send)…"
           rows={1}
           maxLength={2000}
           onKeyDown={(event) => {
@@ -809,7 +926,7 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
         <button type="submit" disabled={!chatInput.trim() || busy} aria-label="Send question">
           <Send size={17} />
         </button>
-        <span>GROUNDED IN YOUR UPLOADED TEXTBOOK</span>
+        <span>ANSWERS GROUNDED STRICTLY IN YOUR UPLOADED TEXTBOOK</span>
       </form>
 
       {/* Founder Direct Feedback */}
@@ -834,22 +951,17 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, busy, chatEnd }) {
 // EMPTY STATE PLACEHOLDER
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Placeholder shown when a study tool has not yet been generated.
- *
- * @param {Component} props.icon   - Lucide icon component.
- * @param {string}    props.title  - Placeholder heading.
- * @param {string}    props.detail - Descriptive subtext.
- */
-function EmptyMaterial({ icon: Icon, title, detail }) {
+function EmptyMaterial({ icon: Icon, title, detail, onGenerate, actionLabel }) {
   return (
     <div className="empty-material">
-      <div className="empty-mark"><Icon size={22} /></div>
+      <div className="empty-mark"><Icon size={24} /></div>
       <h2>{title}</h2>
       <p>{detail}</p>
+      {onGenerate && (
+        <button type="button" className="primary-button empty-generate-btn" onClick={onGenerate}>
+          <Sparkles size={16} /> {actionLabel || 'Generate now'}
+        </button>
+      )}
     </div>
   )
 }
-
-
-// Feature panels stay local to the active temporary study session.

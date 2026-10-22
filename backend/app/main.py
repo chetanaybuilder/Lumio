@@ -319,8 +319,13 @@ async def upload_pdf(file: UploadFile = File(...), session: StudySession = Depen
         # --- Detect section structure and create overlapping chunks ---
         sections = detect_structure(cleaned_pages)
         chunks = create_chunks(sections)
-        if not chunks or len(chunks) > 1000:
-            raise HTTPException(status_code=413, detail="Document is empty or exceeds the processing limit.")
+        if not chunks:
+            raise HTTPException(status_code=422, detail="No readable content or structure could be extracted from this PDF.")
+        if len(chunks) > 1000:
+            # Dynamically consolidate chunks for larger textbooks so they can be processed seamlessly
+            chunks = create_chunks(sections, chunk_size=1000, overlap=100)
+        if len(chunks) > 2000:
+            chunks = chunks[:2000]
 
         # --- Generate embeddings for all chunks ---
         embeddings = await run_in_threadpool(generate_embeddings, [chunk["text"] for chunk in chunks])
@@ -435,7 +440,7 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
         logger.exception("Study material generation failed")
         raise HTTPException(
             status_code=503,
-            detail="Study generation failed. Check Groq configuration and retry.",
+            detail="Study material generation is temporarily unavailable. Please retry in a moment.",
         ) from error
 
 
@@ -495,7 +500,7 @@ async def create_quiz(request: QuizRequest, session: StudySession = Depends(requ
         logger.exception("Quiz generation failed")
         raise HTTPException(
             status_code=503,
-            detail="Quiz generation failed validation or the AI service is unavailable.",
+            detail="Quiz generation is temporarily unavailable. Please retry in a moment.",
         ) from error
 
 
@@ -526,7 +531,7 @@ async def create_flashcards(request: DocumentRequest, session: StudySession = De
         logger.exception("Flashcard generation failed")
         raise HTTPException(
             status_code=503,
-            detail="Flashcard generation failed validation or the AI service is unavailable.",
+            detail="Flashcard generation is temporarily unavailable. Please retry in a moment.",
         ) from error
 
 
@@ -597,7 +602,7 @@ async def ask_lumio(request: ChatRequest, session: StudySession = Depends(requir
         logger.exception("Textbook question answering failed")
         raise HTTPException(
             status_code=503,
-            detail="Ask Lumio is temporarily unavailable. Check Groq configuration and retry.",
+            detail="Ask Lumio tutor is temporarily unavailable. Please retry in a moment.",
         ) from error
 
 

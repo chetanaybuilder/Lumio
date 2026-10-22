@@ -96,7 +96,8 @@ async function saveSession(env, token, data) {
 // ASCII85 Decoder for compressed PDF streams
 function decodeAscii85(str) {
   let clean = str.replace(/\s+/g, "");
-  if (clean.endsWith("~>")) clean = clean.slice(0, -2);
+  const endIdx = clean.indexOf("~>");
+  if (endIdx !== -1) clean = clean.slice(0, endIdx);
   if (clean.startsWith("<~")) clean = clean.slice(2);
   const out = [];
   for (let i = 0; i < clean.length; i += 5) {
@@ -130,7 +131,19 @@ function cleanPdfString(str) {
     .replace(/\\t/g, " ");
 }
 
-// High-precision PDF text and page extractor with FlateDecode + ASCII85 decompression
+function decodeHexPdfString(hex) {
+  let clean = hex.replace(/\s+/g, "");
+  if (clean.length % 2 !== 0) clean += "0";
+  let out = "";
+  for (let i = 0; i < clean.length; i += 2) {
+    const code = parseInt(clean.substr(i, 2), 16);
+    if (code >= 32 && code <= 126) out += String.fromCharCode(code);
+    else if (code === 10 || code === 13 || code === 9) out += " ";
+  }
+  return out;
+}
+
+// High-precision, high-speed PDF text and page extractor with image stream filtering
 async function extractTextFromPdfBytes(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
   const rawStr = new TextDecoder("latin1").decode(bytes);
@@ -143,74 +156,82 @@ async function extractTextFromPdfBytes(arrayBuffer) {
 
   let fullText = "";
   let i = 0;
-  const streamSig = new TextEncoder().encode("stream");
-  const endStreamSig = new TextEncoder().encode("endstream");
+  const maxChars = 150000;
 
-  function findSubarray(src, target, start = 0) {
-    for (let pos = start; pos <= src.length - target.length; pos++) {
-      let found = true;
-      for (let j = 0; j < target.length; j++) {
-        if (src[pos + j] !== target[j]) {
-          found = false;
-          break;
-        }
-      }
-      if (found) return pos;
-    }
-    return -1;
-  }
+  while (i < rawStr.length && fullText.length < maxChars) {
+    const streamIndex = rawStr.indexOf("stream", i);
+    if (streamIndex === -1) break;
 
-  while (i < bytes.length) {
-    const streamStart = findSubarray(bytes, streamSig, i);
-    if (streamStart === -1) break;
+    const headerStart = Math.max(0, streamIndex - 400);
+    const headerStr = rawStr.slice(headerStart, streamIndex);
 
-    const headerStart = Math.max(0, streamStart - 300);
-    const headerStr = new TextDecoder("latin1").decode(bytes.subarray(headerStart, streamStart));
-    const hasAscii85 = headerStr.includes("ASCII85Decode");
-    const hasFlate = headerStr.includes("FlateDecode");
+    // Skip large image bitmaps and binary fonts to prevent memory bloat and CPU timeouts
+    const isImage = headerStr.includes("/Subtype /Image") || headerStr.includes("/Subtype/Image") || headerStr.includes("/Image") || headerStr.includes("/DCTDecode") || headerStr.includes("/JPXDecode");
+    const isFont = headerStr.includes("/Type /Font") || headerStr.includes("/Type/Font") || headerStr.includes("/FontDescriptor");
 
-    let dataStart = streamStart + 6;
-    if (bytes[dataStart] === 13) dataStart++;
-    if (bytes[dataStart] === 10) dataStart++;
+    let dataStart = streamIndex + 6;
+    if (rawStr.charCodeAt(dataStart) === 13) dataStart++;
+    if (rawStr.charCodeAt(dataStart) === 10) dataStart++;
 
-    const endStream = findSubarray(bytes, endStreamSig, dataStart);
+    const endStream = rawStr.indexOf("endstream", dataStart);
     if (endStream === -1) break;
 
-    const streamSlice = bytes.subarray(dataStart, endStream);
-    let decodedStr = null;
+    if (!isImage && !isFont) {
+      const streamSlice = bytes.subarray(dataStart, endStream);
+      const hasAscii85 = headerStr.includes("ASCII85Decode");
+      const hasFlate = headerStr.includes("FlateDecode");
+      let decodedStr = null;
 
-    try {
-      if (hasAscii85 && hasFlate) {
-        const asciiStr = new TextDecoder("latin1").decode(streamSlice);
-        const a85 = decodeAscii85(asciiStr);
-        decodedStr = new TextDecoder("latin1").decode(inflateSync(a85));
-      } else if (hasFlate) {
-        decodedStr = new TextDecoder("latin1").decode(inflateSync(streamSlice));
-      } else if (hasAscii85) {
-        const asciiStr = new TextDecoder("latin1").decode(streamSlice);
-        decodedStr = new TextDecoder("latin1").decode(decodeAscii85(asciiStr));
-      } else {
-        decodedStr = new TextDecoder("latin1").decode(streamSlice);
-      }
-    } catch (_) {}
-
-    if (decodedStr) {
-      const tjRegex = /\((.*?)\)\s*Tj/g;
-      let m;
-      while ((m = tjRegex.exec(decodedStr)) !== null) {
-        fullText += cleanPdfString(m[1]) + " ";
-      }
-      const tjArr = /\[(.*?)\]\s*TJ/g;
-      while ((m = tjArr.exec(decodedStr)) !== null) {
-        const inner = m[1];
-        const pRegex = /\((.*?)\)/g;
-        let pm;
-        while ((pm = pRegex.exec(inner)) !== null) {
-          fullText += cleanPdfString(pm[1]);
+      try {
+        if (hasAscii85 && hasFlate) {
+          const asciiStr = new TextDecoder("latin1").decode(streamSlice);
+          const a85 = decodeAscii85(asciiStr);
+          decodedStr = new TextDecoder("latin1").decode(inflateSync(a85));
+        } else if (hasFlate) {
+          decodedStr = new TextDecoder("latin1").decode(inflateSync(streamSlice));
+        } else if (hasAscii85) {
+          const asciiStr = new TextDecoder("latin1").decode(streamSlice);
+          decodedStr = new TextDecoder("latin1").decode(decodeAscii85(asciiStr));
+        } else {
+          decodedStr = new TextDecoder("latin1").decode(streamSlice);
         }
-        fullText += " ";
+      } catch (_) {}
+
+      if (decodedStr) {
+        // Extract literal strings (...) Tj
+        const tjRegex = /\((.*?)\)\s*Tj/g;
+        let m;
+        while ((m = tjRegex.exec(decodedStr)) !== null) {
+          fullText += cleanPdfString(m[1]) + " ";
+          if (fullText.length >= maxChars) break;
+        }
+
+        // Extract array strings [(...)] TJ
+        const tjArr = /\[(.*?)\]\s*TJ/g;
+        while ((m = tjArr.exec(decodedStr)) !== null) {
+          const inner = m[1];
+          const pRegex = /\((.*?)\)/g;
+          let pm;
+          while ((pm = pRegex.exec(inner)) !== null) {
+            fullText += cleanPdfString(pm[1]);
+          }
+          const hexRegex = /<([0-9a-fA-F]+)>/g;
+          while ((pm = hexRegex.exec(inner)) !== null) {
+            fullText += decodeHexPdfString(pm[1]);
+          }
+          fullText += " ";
+          if (fullText.length >= maxChars) break;
+        }
+
+        // Hex strings <...> Tj
+        const hexTj = /<([0-9a-fA-F]+)>\s*Tj/g;
+        while ((m = hexTj.exec(decodedStr)) !== null) {
+          fullText += decodeHexPdfString(m[1]) + " ";
+          if (fullText.length >= maxChars) break;
+        }
       }
     }
+
     i = endStream + 9;
   }
 
@@ -240,7 +261,7 @@ async function extractTextFromPdfBytes(arrayBuffer) {
   }
 
   const cleaned = fullText.replace(/\s+/g, " ").trim();
-  return { text: cleaned || rawStr.replace(/[^\x20-\x7E\n]/g, " ").slice(0, 30000), pageCount };
+  return { text: cleaned || rawStr.replace(/[^\x20-\x7E\n]/g, " ").slice(0, 40000), pageCount };
 }
 
 // Intelligent TF-IDF / Keyword Context Retrieval for Ask Lumio RAG
@@ -291,7 +312,7 @@ function retrieveRelevantChunks(chunks, query, maxChars = 7000) {
   return selected.join("\n\n---\n\n");
 }
 
-const STUDENT_ERROR_MESSAGE = "App has some bugs, devs are fixing! Please come back after some time.";
+const STUDENT_ERROR_MESSAGE = "The study assistant is momentarily busy processing this textbook. Please try again in a few moments.";
 
 // Clean and safely parse JSON from AI response
 function extractJson(rawText) {

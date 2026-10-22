@@ -42,20 +42,20 @@ async function request(path, token, options = {}) {
     // Parse the error detail from the backend's JSON response.
     const payload = await response.json().catch(() => ({}))
     const detail = payload.detail || ''
-    if (
-      response.status === 429 ||
-      response.status === 413 ||
-      response.status >= 500 ||
-      detail.toLowerCase().includes('rate limit') ||
-      detail.toLowerCase().includes('token') ||
-      detail.toLowerCase().includes('quota') ||
-      detail.toLowerCase().includes('dev tier') ||
-      detail.toLowerCase().includes('capacity') ||
-      detail.toLowerCase().includes('bugs')
-    ) {
-      throw new Error("App has some bugs, devs are fixing! Please come back after some time.")
+
+    if (response.status === 413) {
+      throw new Error(detail || "The PDF file is too large or exceeds the processing limit (max 20 MB / 500 pages).")
     }
-    throw new Error(detail || "App has some bugs, devs are fixing! Please come back after some time.")
+    if (response.status === 429) {
+      throw new Error(detail || "AI inference capacity is temporarily busy. Please wait a few seconds and try again.")
+    }
+    if (response.status === 401) {
+      throw new Error("Your study session has expired or is invalid. Please start a fresh session.")
+    }
+    if (response.status >= 500) {
+      throw new Error(detail || "The service is temporarily busy processing materials. Please retry in a few moments.")
+    }
+    throw new Error(detail || `Request failed with status ${response.status}. Please check your connection and retry.`)
   }
 
   // 204 No Content responses have no body to parse.
