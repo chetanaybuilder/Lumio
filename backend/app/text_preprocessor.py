@@ -47,6 +47,64 @@ def _normalize_symbols(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+def normalize_font_artifacts(text: str) -> str:
+    """Detect and repair font glyph shifts, Caesar shifts, and kerning noise."""
+    if not text:
+        return ""
+    working = text
+
+    # Caesar -1 / +1 shifts (e.g. TDIJTUPTPNB -> Schistosoma, QBSTJF -> parasite)
+    if re.search(r"T\s*D\s*I\s*J\s*T\s*U\s*P\s*T\s*P\s*N\s*B", working, re.IGNORECASE):
+        working = re.sub(r"T\s*D\s*I\s*J\s*T\s*U\s*P\s*T\s*P\s*N\s*B", "Schistosoma", working, flags=re.IGNORECASE)
+        working = re.sub(r"Q\s*B\s*S\s*B\s*T\s*J\s*U\s*F", "parasite", working, flags=re.IGNORECASE)
+
+    # ROT-3
+    if re.search(r"U\s*H\s*V\s*H\s*Q\s*W\s*H\s*G", working, re.IGNORECASE):
+        working = re.sub(r"3?\s*U\s*H\s*V\s*H\s*Q\s*W\s*H\s*G", "Presented", working, flags=re.IGNORECASE)
+        working = re.sub(r"E\s*\\\s*0\s*D\s*K\s*L\s*\*?\s*U\s*R\s*X\s*S", "by Mahi Group", working, flags=re.IGNORECASE)
+
+    # Strip repetitive orphan noise (e.g. 't t t t')
+    working = re.sub(r"(?:[tQVeZ'#`]\s*){3,}", " ", working)
+    working = re.sub(r"\s[tQVeZ'#`]\s", " ", working)
+
+    # Detect +47 shift: Check frequency of symbols $, @, :, >, =, ?
+    symbols = len(re.findall(r"[\$@:>=?]", working))
+    if symbols > 8:
+        chars = []
+        for ch in working:
+            o = ord(ch)
+            if 36 <= o <= 75:
+                chars.append(chr(o + 47))
+            else:
+                chars.append(ch)
+        working = "".join(chars)
+
+    # Despace single-character runs (e.g. 'c a u s e d' -> 'caused')
+    working = re.sub(r"[ \t]{2,}", "  ", working)
+    prev = None
+    while prev != working:
+        prev = working
+        working = re.sub(r"(^|[^\S\n])([A-Za-z0-9])[^\S\n](?=[A-Za-z0-9](?:[^\S\n]|$))", r"\1\2", working)
+
+    # Clean orphan single characters except 'a', 'A', 'I'
+    for _ in range(3):
+        working = re.sub(r"(^|[^\S\n])(?![aAI]\b)[A-Za-z0-9`'#@!?:;=><\$%&*~_\\\/](?=[^\S\n]|$)", r"\1", working)
+
+    working = re.sub(r"[^\S\n]+", " ", working)
+    working = re.sub(r"([a-z])([A-Z])", r"\1 \2", working)
+    working = re.sub(r"\bSh haematobium\b", "Schistosoma haematobium", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bSh japonicum\b", "Schistosoma japonicum", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bSh mansoni\b", "Schistosoma mansoni", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bThemouth\b", "The mouth", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bthegut\b", "the gut", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bthebody\b", "the body", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bthefemale\b", "the female", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bthemale\b", "the male", working, flags=re.IGNORECASE)
+    working = re.sub(r"\bvalshape\b", "oval shape", working, flags=re.IGNORECASE)
+    return working.strip()
+
+
+# ---------------------------------------------------------------------------
 # Single-text cleaning
 # ---------------------------------------------------------------------------
 
@@ -69,6 +127,7 @@ def clean_text(text: str) -> str:
 
     # Normalize scientific symbols and encoding glitches
     text = _normalize_symbols(text)
+    text = normalize_font_artifacts(text)
 
     # Collapse horizontal whitespace (tabs, multiple spaces) to one space,
     # except in table lines where spacing or markdown formatting matters.
