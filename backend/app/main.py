@@ -66,6 +66,11 @@ from app.session_manager import (
 )
 from app.retrieval_utils import rewrite_query_with_history, verify_citations
 from app.structure_detector import build_hierarchical_outline, detect_structure
+from app.study_engine import (
+    post_process_flashcards,
+    post_process_notes,
+    post_process_quiz,
+)
 from app.text_preprocessor import clean_pages
 from app.vector_store import (
     clear_all_chunks,
@@ -472,6 +477,9 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
     and caches the result on the session.
     """
     document = owned_document(session, request.document_id)
+    if kind in document.get("materials", {}):
+        return document["materials"][kind]
+
     context, pages = document_context(document)
     sections = document.get("sections", [])
     outline = build_hierarchical_outline(sections)
@@ -482,11 +490,11 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
                 study_prompt(kind, document["filename"], context, instructions),
                 NotesOutput,
             )
-        material = valid_pages(result.model_dump(), pages)
+        raw_material = valid_pages(result.model_dump(), pages)
 
         # If subtopics exist in outline and kind is deep-notes, ensure all subtopics are populated
         if kind == "deep-notes" and outline:
-            if not material.get("subtopics"):
+            if not raw_material.get("subtopics"):
                 subtopics_list = []
                 for s in outline:
                     subtopics_list.append({
@@ -504,11 +512,11 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
                         "exam_tips": [],
                         "figures": [],
                     })
-                material["subtopics"] = subtopics_list
+                raw_material["subtopics"] = subtopics_list
 
         # If topics exist in outline and kind is quick-notes, ensure topics are populated
         if kind == "quick-notes" and outline:
-            if not material.get("topics"):
+            if not raw_material.get("topics"):
                 from collections import defaultdict
                 by_topic = defaultdict(list)
                 for s in outline:
@@ -527,8 +535,9 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
                         "key_formulas": [],
                         "memory_trick": "",
                     })
-                material["topics"] = topics_list
+                raw_material["topics"] = topics_list
 
+        material = post_process_notes(raw_material, pages)
         document["materials"][kind] = material
         return material
     except Exception as error:
@@ -563,9 +572,12 @@ async def create_quiz(request: QuizRequest, session: StudySession = Depends(requ
     Generate a quiz with the requested number of questions and difficulty.
 
     Validates that the response contains the correct question count,
-    valid multiple-choice answers, and correct true/false formats.
+    valid multiple-choice answers, balanced option positions, and correct formats.
     """
     document = owned_document(session, request.document_id)
+    if "quiz" in document.get("materials", {}):
+        return document["materials"]["quiz"]
+
     context, pages = document_context(document)
     prompt = study_prompt(
         "a quiz", document["filename"], context,
@@ -588,7 +600,8 @@ async def create_quiz(request: QuizRequest, session: StudySession = Depends(requ
             if item.type == "true_false" and item.answer.strip().lower() not in {"true", "false"}:
                 raise ValueError("Invalid true/false answer")
 
-        material = valid_pages(result.model_dump(), pages)
+        raw_material = valid_pages(result.model_dump(), pages)
+        material = post_process_quiz(raw_material, pages)
         document["materials"]["quiz"] = material
         return material
     except Exception as error:
@@ -603,6 +616,9 @@ async def create_quiz(request: QuizRequest, session: StudySession = Depends(requ
 async def create_flashcards(request: DocumentRequest, session: StudySession = Depends(require_session)) -> dict:
     """Generate a deck of question-and-answer flashcards from the textbook."""
     document = owned_document(session, request.document_id)
+    if "flashcards" in document.get("materials", {}):
+        return document["materials"]["flashcards"]
+
     context, pages = document_context(document)
     try:
         async with generation_slots:
@@ -619,7 +635,8 @@ async def create_flashcards(request: DocumentRequest, session: StudySession = De
         if not 2 <= len(result.cards) <= 20:
             raise ValueError("Flashcard deck must contain 2 to 20 cards")
 
-        material = valid_pages(result.model_dump(), pages)
+        raw_material = valid_pages(result.model_dump(), pages)
+        material = post_process_flashcards(raw_material, pages)
         document["materials"]["flashcards"] = material
         return material
     except Exception as error:
