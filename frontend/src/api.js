@@ -27,16 +27,64 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
  * @returns {Promise<Response|null>} The fetch Response, or null for 204.
  * @throws {Error} With the server's `detail` message on non-OK responses.
  */
+let currentSessionToken = null
+let sessionRefreshListener = null
+
+export function setSessionToken(token) {
+  currentSessionToken = token
+}
+
+export function onSessionRefresh(callback) {
+  sessionRefreshListener = callback
+}
+
+/**
+ * Execute an authenticated API request with error handling and automatic retry.
+ *
+ * @param {string} path    - API endpoint path (e.g., '/api/sessions').
+ * @param {string} token   - Session token for the X-Session-Token header.
+ * @param {object} options - Fetch options (method, body, headers, signal, etc.).
+ * @returns {Promise<Response|null>} The fetch Response, or null for 204.
+ * @throws {Error} With the server's `detail` message on non-OK responses.
+ */
 async function request(path, token, options = {}) {
+  const effectiveToken = token || currentSessionToken
   const headers = new Headers(options.headers || {})
 
   // Attach session token if provided.
-  if (token) headers.set('X-Session-Token', token)
+  if (effectiveToken) headers.set('X-Session-Token', effectiveToken)
 
   // Auto-set JSON content type for non-FormData request bodies.
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  let response
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw err // Allow AbortController cancellations to propagate cleanly
+    }
+    throw new Error(`Network connection error: ${err.message}. Please verify the server is running.`)
+  }
+
+  // Transparent 401 Session Recovery: if token expired, mint a new one and retry once
+  if (response.status === 401 && !options._retry && path !== '/api/sessions') {
+    try {
+      const renewRes = await fetch(`${API_BASE}/api/sessions`, { method: 'POST' })
+      if (renewRes.ok) {
+        const renewData = await renewRes.json()
+        const newToken = renewData.session_token
+        currentSessionToken = newToken
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.setItem('lumio-session', newToken)
+        }
+        if (sessionRefreshListener) sessionRefreshListener(newToken)
+        return await request(path, newToken, { ...options, _retry: true })
+      }
+    } catch {
+      // If renewal fails, proceed with standard 401 error below
+    }
+  }
 
   if (!response.ok) {
     // Parse the error detail from the backend's JSON response.
@@ -123,10 +171,13 @@ export async function getDocument(token, documentId) {
  * @param {string} path    - API endpoint path (e.g., '/api/study/deep-notes').
  * @param {string} token   - Session token.
  * @param {object} payload - Request body (must include `document_id`).
+ * @param {AbortSignal} [signal] - Optional abort signal for request cancellation.
  * @returns {Promise<object>} The generated material or chat response.
  */
-export async function generate(path, token, payload) {
-  const response = await request(path, token, { method: 'POST', body: JSON.stringify(payload) })
+export async function generate(path, token, payload, signal = null) {
+  const options = { method: 'POST', body: JSON.stringify(payload) }
+  if (signal) options.signal = signal
+  const response = await request(path, token, options)
   return response.json()
 }
 

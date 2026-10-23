@@ -8,7 +8,7 @@ assurance for Notes, Quizzes, Flashcards, and Chat.
 Capabilities:
 1. **Map-Reduce Generation**:
    - Decomposes textbooks into chapters and sections.
-   - Generates section-level notes within Groq TPM/context budgets.
+   - Generates section-level notes within model token/context budgets.
    - Assembles and harmonizes sections into unified chapter notes.
 2. **Post-Processing & Quality Normalization**:
    - Deduplicates bullet points and concepts across sections.

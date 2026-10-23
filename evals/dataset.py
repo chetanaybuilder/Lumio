@@ -5,8 +5,23 @@ Contains 42 authentic question-to-page pairs across all 16 pages of
 Chemistry_Textbook_CBSE.pdf, plus 10 extraction spot-check criteria.
 """
 
+from typing import TypedDict
+
+
+class ExtractionSpotCheck(TypedDict):
+    page: int
+    title: str
+    required_snippets: list[str]
+
+
+class RetrievalQuestion(TypedDict):
+    id: str
+    question: str
+    expected_pages: list[int]
+
+
 # 42 Question -> Expected Page(s) pairs for retrieval evaluation
-RETRIEVAL_QUESTIONS = [
+RETRIEVAL_QUESTIONS: list[RetrievalQuestion] = [
     # Chapter 1: Structure of the Atom (Pages 2-3)
     {
         "id": "q01",
@@ -235,7 +250,7 @@ RETRIEVAL_QUESTIONS = [
 ]
 
 # 10 extraction fidelity spot checks across the 16 pages
-EXTRACTION_SPOT_CHECKS = [
+EXTRACTION_SPOT_CHECKS: list[ExtractionSpotCheck] = [
     {
         "page": 2,
         "title": "Structure of the Atom / Thomson & Millikan",

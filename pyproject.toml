@@ -1,0 +1,30 @@
+[tool.pyrefly]
+search-path = [
+    ".",
+    "backend",
+]
+
+[tool.pyright]
+include = [
+    "backend",
+    "evals",
+]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv",
+    "backend/.venv",
+]
+extraPaths = [
+    "backend",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "backend",
+    ".",
+]
+testpaths = [
+    "backend/tests",
+]
+addopts = "-v"

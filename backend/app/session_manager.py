@@ -108,10 +108,13 @@ async def get_session(token: str | None) -> StudySession | None:
         return None
     async with session_lock:
         session = sessions.get(token)
-        if session and session.expires_at > time.time():
-            # Sliding expiry — reset the clock on every valid access.
-            session.expires_at = time.time() + SESSION_TTL_SECONDS
-            return session
+        if session:
+            if session.expires_at > time.time():
+                # Sliding expiry — reset the clock on every valid access.
+                session.expires_at = time.time() + SESSION_TTL_SECONDS
+                return session
+            # Eagerly remove expired session to prevent memory leak
+            sessions.pop(token, None)
         return None
 
 

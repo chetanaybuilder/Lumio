@@ -17,13 +17,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT))
 
-from evals.dataset import EXTRACTION_SPOT_CHECKS, RETRIEVAL_QUESTIONS
 from app.pdf_extractor import extract_text_from_pdf
 from app.text_preprocessor import clean_pages
 from app.structure_detector import detect_structure
 from app.chunker import create_chunks
 from app.embedding_generator import generate_embeddings, generate_embedding
 from app.vector_store import clear_all_chunks, store_chunks, query_chunks
+
+from evals.dataset import EXTRACTION_SPOT_CHECKS, RETRIEVAL_QUESTIONS
+
 
 
 def run_extraction_eval(pdf_path: str) -> dict:

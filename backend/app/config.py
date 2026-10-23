@@ -9,8 +9,10 @@ override them through process environment variables.
 
 Environment variables
 ---------------------
-GROQ_API_KEY           : API key for Groq Cloud (high-speed LLM inference).
-GROQ_MODEL             : Text-generation model name (default: llama-3.3-70b-versatile).
+CLOUDFLARE_ACCOUNT_ID  : Account ID for Cloudflare Workers AI.
+CLOUDFLARE_API_TOKEN   : API token for Cloudflare Workers AI inference.
+CLOUDFLARE_MODEL       : Primary text-generation model (default: @cf/meta/llama-3.3-70b-instruct-fp8-fast).
+CLOUDFLARE_FALLBACK_MODEL : Fallback text-generation model (default: @cf/meta/llama-3.1-8b-instruct-fp8).
 LUMIO_TEMP_DIR         : Writable directory for temporary upload files.
 SESSION_TTL_SECONDS    : Sliding inactivity expiry for study sessions (seconds).
 MAX_UPLOAD_MB          : Maximum PDF upload size in megabytes.
@@ -36,14 +38,20 @@ TEMP_DIR = Path(os.getenv("LUMIO_TEMP_DIR", BASE_DIR / "temp"))
 
 
 # ---------------------------------------------------------------------------
-# Groq AI provider
+# Cloudflare Workers AI provider
 # ---------------------------------------------------------------------------
 
-# Groq API key — required for high-speed study-material generation and chat.
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+# Cloudflare Account ID — found in your Cloudflare dashboard overview.
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "8b2dd8293e95e2a90c65bb8a7fb91632")
+
+# Cloudflare API Token — created with Workers AI read/write permissions.
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
 
 # Text-generation model identifier used for notes, quizzes, flashcards, and chat.
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+CLOUDFLARE_MODEL = os.getenv("CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast")
+
+# Fast fallback model when primary model is busy or hits rate limits.
+CLOUDFLARE_FALLBACK_MODEL = os.getenv("CLOUDFLARE_FALLBACK_MODEL", "@cf/meta/llama-3.1-8b-instruct-fp8")
 
 
 # ---------------------------------------------------------------------------

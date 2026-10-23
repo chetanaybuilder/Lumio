@@ -21,7 +21,10 @@ import {
   CircleHelp, Download, FileText, Flame, Layers3, LoaderCircle, Mail, MessageCircle,
   RotateCcw, Search, Send, Shuffle, Sparkles, Trash2, Upload, X,
 } from 'lucide-react'
-import { closeSession, createSession, exportPdf, generate, getDocument, uploadDocument } from './api.js'
+import {
+  closeSession, createSession, exportPdf, generate, getDocument,
+  uploadDocument, setSessionToken, onSessionRefresh
+} from './api.js'
 
 
 // ---------------------------------------------------------------------------
@@ -73,20 +76,30 @@ export default function App() {
   const [cardIndex, setCardIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
 
-  // --- DOM refs ---
+  // --- DOM & task refs ---
   const fileInput = useRef(null)
   const chatEnd = useRef(null)
+  const activeAbortRef = useRef(null)
 
   // -------------------------------------------------------------------------
   // Session initialization — restore from sessionStorage or create new
   // -------------------------------------------------------------------------
   useEffect(() => {
     let alive = true
+
+    onSessionRefresh((newToken) => {
+      if (alive) {
+        setToken(newToken)
+        setSessionToken(newToken)
+      }
+    })
+
     const start = async () => {
       const saved = sessionStorage.getItem('lumio-session')
       const savedDocument = sessionStorage.getItem('lumio-document')
       try {
         if (saved) {
+          setSessionToken(saved)
           let restoredDocument = null
           if (savedDocument) {
             const cached = JSON.parse(savedDocument)
@@ -106,6 +119,7 @@ export default function App() {
       try {
         const created = await createSession()
         sessionStorage.setItem('lumio-session', created.session_token)
+        setSessionToken(created.session_token)
         if (alive) {
           setToken(created.session_token)
           setLoading('')
@@ -132,6 +146,7 @@ export default function App() {
   // Session reset — close old session, create new one
   // -------------------------------------------------------------------------
   async function resetSession() {
+    activeAbortRef.current?.abort()
     setError('')
     try { if (token) await closeSession(token) } catch { /* cleanup is automatic */ }
     sessionStorage.removeItem('lumio-session')
@@ -145,6 +160,7 @@ export default function App() {
     try {
       const created = await createSession()
       sessionStorage.setItem('lumio-session', created.session_token)
+      setSessionToken(created.session_token)
       setToken(created.session_token)
       setLoading('')
     } catch (reason) {
@@ -162,11 +178,12 @@ export default function App() {
       setError('Please select a valid PDF textbook file to continue.')
       return
     }
-    if (file.size > 25 * 1024 * 1024) {
+    if (file.size > 20 * 1024 * 1024) {
       setError('This textbook exceeds the 20 MB size limit. Please choose a specific chapter or document under 20 MB.')
       return
     }
 
+    activeAbortRef.current?.abort()
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
     setError('')
     setLoading(`Reading "${file.name}" (${sizeMb} MB) and preparing pages…`)
@@ -210,21 +227,29 @@ export default function App() {
     setView(id)
     setError('')
     if (!document || !materialRoutes[id] || materials[id]) return
+
+    activeAbortRef.current?.abort()
+    const controller = new AbortController()
+    activeAbortRef.current = controller
+
     const [path, kind] = materialRoutes[id]
     setLoading(`Building ${tools.find((tool) => tool.id === id)?.label.toLowerCase()} from your textbook…`)
     try {
       const payload = { document_id: document.document_id }
       if (id === 'quiz') payload.count = 8
-      const generated = await generate(path, token, payload)
+      const generated = await generate(path, token, payload, controller.signal)
       setMaterials((current) => ({ ...current, [kind]: generated }))
       setQuizAnswers({})
       setQuizSubmitted(false)
       setCardIndex(0)
       setFlipped(false)
     } catch (reason) {
+      if (reason.name === 'AbortError') return
       setError(reason.message)
     } finally {
-      setLoading('')
+      if (activeAbortRef.current === controller) {
+        setLoading('')
+      }
     }
   }
 
@@ -255,10 +280,15 @@ export default function App() {
     setChat((current) => [...current, { role: 'student', content: question }])
     setBusyChat(true)
     setError('')
+
+    const controller = new AbortController()
+    activeAbortRef.current = controller
+
     try {
-      const answer = await generate('/api/chat', token, { document_id: document.document_id, question })
+      const answer = await generate('/api/chat', token, { document_id: document.document_id, question }, controller.signal)
       setChat((current) => [...current, { role: 'lumio', ...answer }])
     } catch (reason) {
+      if (reason.name === 'AbortError') return
       setError(reason.message)
     } finally {
       setBusyChat(false)
@@ -395,7 +425,7 @@ export default function App() {
                 </div>
               )}
               <div className="upload-assurance">
-                <span>01</span> Private by design <i /> <span>02</span> No account needed <i /> <span>03</span> Groq LPU powered
+                <span>01</span> Private by design <i /> <span>02</span> No account needed <i /> <span>03</span> Cloudflare AI powered
               </div>
             </div>
             <div className="how-row">
@@ -950,7 +980,7 @@ function NotesPanel({ material, view, onCopy, onGenerate, actionLabel }) {
             <Search size={14} className="toc-search-icon" />
             <input
               type="text"
-              placeholder={isSubtopicMode ? "Search 46 subtopics..." : "Search topics..."}
+              placeholder={isSubtopicMode ? `Search ${subtopics.length} subtopics...` : `Search ${topics.length} topics...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="toc-search-input"
@@ -1343,7 +1373,7 @@ function FlashcardPanel({ deck, index, setIndex, flipped, setFlipped, onShuffle,
       >
         <span className="flashcard-corner" />
         <span className="card-kicker">{flipped ? '✓ THE ANSWER' : '⚡ QUICK RECALL'}</span>
-        <strong>{flipped ? (card?.back || '') : (card?.front || '')}</strong>
+        <strong><MathText text={flipped ? (card?.back || '') : (card?.front || '')} /></strong>
         <span className="flip-hint">Tap or press <kbd>Space</kbd> to {flipped ? 'see question' : 'reveal answer'}</span>
         {card?.source_pages?.length > 0 && flipped && (
           <span className="card-source">SOURCE · P. {card.source_pages.join(', ')}</span>
@@ -1427,7 +1457,9 @@ function ChatPanel({ chat, chatInput, setChatInput, onSubmit, onAsk, onClear, bu
             </span>
             <div>
               <div className="message-author">{message.role === 'lumio' ? 'LUMIO TUTOR' : 'YOU'}</div>
-              <p>{message.content || message.answer}</p>
+              <div className="chat-body-text">
+                <MathText text={message.content || message.answer} />
+              </div>
               {message.source_pages?.length > 0 && (
                 <div className="chat-sources">📖 TEXTBOOK CITATION · PAGES {message.source_pages.join(', ')}</div>
               )}

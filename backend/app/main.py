@@ -17,9 +17,8 @@ cleanup task is gracefully cancelled.
 
 Concurrency
 -----------
-A semaphore (``generation_slots``) limits the number of concurrent Groq
-generation calls to 4 to avoid overwhelming the provider's free-tier
-rate limits.
+A semaphore (``generation_slots``) limits the number of concurrent Cloudflare
+AI generation calls to 4 to avoid overwhelming provider concurrency.
 
 Session security
 ----------------
@@ -35,10 +34,10 @@ from tempfile import NamedTemporaryFile
 from uuid import uuid4
 
 from app.chunker import create_chunks
+from app.cloudflare_client import generate_structured
 from app.config import FRONTEND_ORIGINS, MAX_UPLOAD_BYTES, SESSION_TTL_SECONDS, TEMP_DIR
 from app.embedding_generator import generate_embedding, generate_embeddings
 from app.export_service import make_pdf
-from app.groq_client import generate_structured
 from app.pdf_extractor import (
     PDFCorruptedError,
     PDFEncryptedError,

@@ -8,11 +8,11 @@ The cleaner preserves text. The structure detector is heuristic; headings that d
 
 ## Embeddings and retrieval
 
-The centralized Groq client uses `llama-3.3-70b-versatile` (with `llama-3.1-8b-instant` as fallback) on Groq LPUs for high-speed, high-quality structured text generation. Local semantic and keyword embeddings provide dense and sparse vectors without external embedding rate limits. Cosine distance and BM25 are fused with Reciprocal Rank Fusion for nearest-neighbor similarity search. Every vector stores `session_id`, `document_id`, section, and source pages. Queries require both session and document filters; deletion uses both as well. A section-aware map-reduce pipeline is used for note generation, while Ask Lumio retrieves the nearest chunks and rejects matches below a calibrated similarity threshold.
+The centralized Cloudflare Workers AI client uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (with `@cf/meta/llama-3.1-8b-instruct-fp8` as fallback) for high-speed, high-quality structured text generation. Local semantic and keyword embeddings provide dense and sparse vectors without external embedding rate limits. Cosine distance and BM25 are fused with Reciprocal Rank Fusion for nearest-neighbor similarity search. Every vector stores `session_id`, `document_id`, section, and source pages. Queries require both session and document filters; deletion uses both as well. A section-aware map-reduce pipeline is used for note generation, while Ask Lumio retrieves the nearest chunks and rejects matches below a calibrated similarity threshold.
 
 ## Generation and validation
 
-Prompt templates explicitly treat uploaded text as untrusted reference material. Structured Groq responses are validated by Pydantic models for notes, quiz questions, cards, and chat answers. The API removes generated source-page claims not present in the document. Quiz count, answer membership, type, and choice constraints are checked before returning output. Provider, malformed-response, and validation errors return safe HTTP errors rather than fabricated study material.
+Prompt templates explicitly treat uploaded text as untrusted reference material. Structured Cloudflare Workers AI responses are validated by Pydantic models for notes, quiz questions, cards, and chat answers. The API removes generated source-page claims not present in the document. Quiz count, answer membership, type, and choice constraints are checked before returning output. Provider, malformed-response, and validation errors return safe HTTP errors rather than fabricated study material.
 
 ## Session lifecycle and privacy
 
@@ -22,7 +22,7 @@ This is a single-process MVP: session records and generated study outputs are no
 
 The upload route enforces its byte limit while copying the parsed multipart file into a temporary file. Starlette may already have received and spooled the multipart body before that route-level check runs; production ingress must also enforce a request-body limit. There is no distributed or per-session rate limiter yet, and session creation is public, so this MVP needs an upstream abuse-control layer before unrestricted public exposure.
 
-Extracted document excerpts are sent to Groq's high-speed inference API for generated study materials or answers. Chat requests also send the student's question and a short recent conversation history. Provider-side handling and retention are governed by Groq's terms and configuration; Lumio does not log document text intentionally.
+Extracted document excerpts are sent to Cloudflare Workers AI for generated study materials or answers. Chat requests also send the student's question and a short recent conversation history. Provider-side handling and retention are governed by Cloudflare's terms and configuration; Lumio does not log document text intentionally.
 
 ## PDF exports
 
@@ -51,5 +51,5 @@ The browser uses Vite's `/api` proxy locally. Production deployments configure `
  
 ## Deployment
  
-The application frontend is deployed to Cloudflare Pages (`lumio-study.pages.dev`) for global static CDN delivery. The backend is deployed as a containerized FastAPI service on a cloud provider (such as Fly.io, Render, or Railway) with access to PyMuPDF and Groq API.
+The application frontend is deployed to Cloudflare Pages (`lumio-study.pages.dev`) for global static CDN delivery. The backend is deployed as a containerized FastAPI service on a cloud provider (such as Fly.io, Render, or Railway) with access to PyMuPDF and Cloudflare Workers AI.
 

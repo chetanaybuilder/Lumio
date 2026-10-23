@@ -1,0 +1,5 @@
+# Pyrefly Language Server & Type Checker Configuration
+search-path = [
+    ".",
+    "backend",
+]

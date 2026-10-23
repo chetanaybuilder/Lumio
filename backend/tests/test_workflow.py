@@ -11,7 +11,7 @@ Integration tests that exercise the full user journey:
 5. Export each material type as a PDF.
 6. Delete documents and sessions.
 
-All Groq calls are stubbed with deterministic fixtures so the tests
+All LLM calls are stubbed with deterministic fixtures so the tests
 run without a live API key.  PDF files are synthesized via PyMuPDF with
 realistic educational content to exercise the extraction + chunking
 pipeline on real document structure.
@@ -327,4 +327,40 @@ def test_pdf_export_all_materials_integrity():
         assert isinstance(pdf_bytes, bytes)
         assert len(pdf_bytes) > 500
         assert pdf_bytes.startswith(b"%PDF-")
+
+
+def test_pdf_export_unicode_subscripts_and_greek():
+    """Verify that chemistry subscripts (H₂O, BeCl₂), superscripts (10⁻⁷), and Greek (α, Δ) render cleanly without error."""
+    import pypdf
+    from io import BytesIO
+    from app.export_service import make_pdf
+
+    complex_notes = {
+        "title": "Advanced Chemical Bonding & Thermodynamics (ΔH, π bonds)",
+        "sections": [
+            {
+                "heading": "1. VSEPR Theory for BeCl₂ & H₂O",
+                "content": "BeCl₂ has linear geometry (180°), whereas H₂O has bent geometry due to 2 lone pairs.\nRate constant k = 10⁻⁷ mol/L.",
+                "source_pages": [4, 5],
+            },
+            {
+                "heading": "2. α-Helix and Enthalpy",
+                "content": "Proteins exhibit α-helix structures stabilized by H-bonding. Reaction enthalpy is ΔH < 0.",
+                "source_pages": [6],
+            },
+        ],
+    }
+
+    pdf_bytes = make_pdf("deep-notes", complex_notes)
+    assert pdf_bytes.startswith(b"%PDF-")
+
+    # Read back with pypdf to verify validity
+    reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+    assert len(reader.pages) >= 1
+    extracted_text = "".join(page.extract_text() for page in reader.pages)
+    # Check that H2O or H₂O and BeCl2 or BeCl₂ and 10-7 are present
+    assert "H2O" in extracted_text or "H₂O" in extracted_text
+    assert "BeCl2" in extracted_text or "BeCl₂" in extracted_text
+    assert "10-7" in extracted_text or "10⁻⁷" in extracted_text
+
 

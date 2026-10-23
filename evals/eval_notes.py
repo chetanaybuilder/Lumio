@@ -22,6 +22,7 @@ from app.text_preprocessor import clean_pages
 from app.structure_detector import detect_structure, build_hierarchical_outline
 from app.study_engine import post_process_notes
 
+
 # 20 essential CBSE chemistry landmark concepts that comprehensive notes must cover
 CORE_LANDMARKS = [
     "cathode ray", "rutherford", "bohr", "quantum numbers", "aufbau",

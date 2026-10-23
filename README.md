@@ -1,10 +1,10 @@
 <div align="center">
 
 # 🌟 Lumio
-### Intelligent, Grounded Textbook Study Workspace Powered by Groq & Cloudflare
+### Intelligent, Grounded Textbook Study Workspace Powered by Cloudflare Workers AI
 
 [![Live App](https://img.shields.io/badge/Live%20Demo-lumio--study.pages.dev-10b981?style=for-the-badge&logo=cloudflare&logoColor=white)](https://lumio-study.pages.dev)
-[![Groq AI](https://img.shields.io/badge/AI-Groq%20LPU%20(Sub--5s)-f55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com)
+[![Cloudflare AI](https://img.shields.io/badge/AI-Cloudflare%20Workers%20AI-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers-ai/)
 [![Cloudflare](https://img.shields.io/badge/Deployed%20on-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://vitejs.dev)
@@ -35,7 +35,7 @@
 | **🧪 Interactive Quizzes** | Multiple choice, true/false, and short answer practice problems complete with detailed explanations and difficulty levels. |
 | **🗂️ Active Recall Flashcards** | Front-and-back study cards formatted for active recall and spaced repetition. |
 | **💬 Ask Lumio (Contextual Q&A)** | Ask questions directly against your textbook. Every answer is strictly grounded in the document and cites exact source pages. |
-| **⚡ High-Speed Inference** | Powered by Groq LPUs (`llama-3.3-70b-versatile`), generating high-quality structured study outputs with low latency. |
+| **⚡ High-Speed Inference** | Powered by Cloudflare Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`), generating high-quality structured study outputs with low latency. |
 | **📄 Styled PDF Export** | Download generated notes, quiz sheets, or flashcard decks as beautifully formatted, ready-to-print PDFs. |
 | **🔒 Ephemeral & Private** | Zero login required. Each tab receives an isolated, temporary session that self-cleans after inactivity. |
 
@@ -54,8 +54,8 @@ graph TD
     F --> G[Ask Lumio: Hybrid Retrieval + RRF]
     D --> H[Map-Reduce Study Prompt Assembler]
     
-    G --> I[Groq LPU Engine: llama-3.3-70b-versatile]
-    H --> I[Groq LPU Engine: llama-3.3-70b-versatile]
+    G --> I[Cloudflare Workers AI: llama-3.3-70b-instruct-fp8-fast]
+    H --> I[Cloudflare Workers AI: llama-3.3-70b-instruct-fp8-fast]
     
     I --> J[Type-Safe Pydantic Output Validation]
     J --> K[Source Page Verification Filter]
@@ -72,12 +72,12 @@ graph TD
 - Hybrid search retrieves nearest-neighbor excerpts with high recall and precision.
 
 ### 3. Structured Generation & Page Verification
-- Study artifacts (Notes, Quizzes, Flashcards, Chat) are generated using Groq (`llama-3.3-70b-versatile`) with strict JSON schema and Pydantic validation.
+- Study artifacts (Notes, Quizzes, Flashcards, Chat) are generated using Cloudflare Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`) with strict JSON schema and Pydantic validation.
 - An automated post-processor inspects all citations, verifying claims against actual source pages.
 
 ### 4. Production Deployment Architecture
 - **Frontend**: Static React + Vite application deployed to **Cloudflare Pages** for fast global CDN distribution.
-- **Backend**: FastAPI Python service running on container/VM infrastructure (Fly.io, Render, Railway, or VPS) with access to PyMuPDF and Groq LPUs.
+- **Backend**: FastAPI Python service running on container/VM infrastructure (Fly.io, Render, Railway, or VPS) with access to PyMuPDF and Cloudflare Workers AI.
 - Communication via `VITE_API_BASE_URL` with CORS configured via `FRONTEND_ORIGINS`.
 
 ---
@@ -87,7 +87,7 @@ graph TD
 ### Prerequisites
 - **Python 3.11+**
 - **Node.js 20+** and **npm**
-- **Groq API Key** ([Get one for free at console.groq.com](https://console.groq.com/keys))
+- **Cloudflare Account ID & API Token** ([Cloudflare Dashboard](https://dash.cloudflare.com/))
 
 ---
 
@@ -111,14 +111,16 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `backend/.env` and insert your Groq API Key:
+Edit `backend/.env` and insert your Cloudflare credentials:
 ```env
-GROQ_API_KEY=your_actual_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
+CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
+CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
+CLOUDFLARE_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
+CLOUDFLARE_FALLBACK_MODEL=@cf/meta/llama-3.1-8b-instruct-fp8
 SESSION_TTL_SECONDS=3600
 MAX_UPLOAD_MB=20
 MAX_PDF_PAGES=500
-FRONTEND_ORIGINS=http://localhost:5173
+FRONTEND_ORIGINS=http://localhost:5173,https://lumio-study.pages.dev
 ```
 
 Start the FastAPI development server:
@@ -166,7 +168,8 @@ Set environment variable `VITE_API_BASE_URL` in Cloudflare Pages dashboard to yo
 
 ### 2. Deploy Backend:
 Deploy the `backend/` directory using Docker or standard Python ASGI server (`uvicorn app.main:app --host 0.0.0.0 --port 8000`), configuring:
-- `GROQ_API_KEY`: Your Groq API key
+- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare Account ID
+- `CLOUDFLARE_API_TOKEN`: Your Cloudflare API Token
 - `FRONTEND_ORIGINS`: `https://lumio-study.pages.dev` (or custom domain)
 
 ---
