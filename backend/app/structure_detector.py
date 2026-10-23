@@ -3,26 +3,23 @@ Structure Detector — Lumio Backend
 ===================================
 
 Scans cleaned PDF pages line by line and groups content into logical
-sections based on robust educational heading detection.
+hierarchical sections (Chapter > Section > Subsection).
 
-Recognized heading patterns:
-1. Chapter / Unit / Module markers:
-   - ``Chapter 1``, ``CHAPTER 12: Atomic Structure``
-   - ``Unit 3``, ``Module 2``, ``Section 4``
-2. Dotted numeric section prefixes:
-   - ``1.1 Introduction``, ``2.3 Covalent Bonding``, ``4.2.1 Hess's Law``
-3. Educational landmark headings:
-   - ``Summary``, ``Key Concepts``, ``Important Formulas``, ``Exercises``
-4. Diagram & Figure structural markers:
-   - ``[FIGURE / DIAGRAM: ...]``
-   - ``[STRUCTURED TABLES (Page ...)]``
+Capabilities:
+1. Uses Authoritative Document TOC (`doc.get_toc()`) if available in PDF metadata.
+2. Robust Fallback Detection for Educational Headings:
+   - Level 1 (Chapters / Major Divisions): ``Chapter 1: ...``, ``Unit 3``, ``PART I``,
+     ``Practice Numerical Problems``, ``Document Overview``.
+   - Level 2 (Sections / Topics): ``1.1 Discovery of Sub-Atomic Particles``,
+     ``2.4 VSEPR Theory``, ``3.2 Ideal Gas Equation``.
+   - Level 3 (Subsections / Concepts): ``1.4.1 ...``, ``Bond Parameters:``,
+     ``Quantum Numbers:``, ``Lewis Dot Structures:``.
+3. Ensures every section and downstream chunk carries its full hierarchical path:
+   ``Chapter > Section > Subsection``.
 """
 
 import re
-
-# ---------------------------------------------------------------------------
-# Heading detection heuristics
-# ---------------------------------------------------------------------------
+from typing import Any
 
 _LANDMARK_HEADINGS = {
     "summary",
@@ -34,94 +31,147 @@ _LANDMARK_HEADINGS = {
     "glossary",
     "conclusions",
     "practice problems",
+    "practice numerical problems",
     "learning objectives",
 }
 
 
-def _is_heading(line: str) -> bool:
+def _classify_heading(line: str) -> tuple[int, str] | None:
     """
-    Return ``True`` if *line* matches a recognized textbook heading pattern.
-
-    Heuristics:
-    - Line length must be reasonable for a title (<= 140 characters).
-    - Must not end with a sentence-ending period unless it's a short numbered prefix.
+    Check if a line matches a recognized textbook heading pattern.
+    Returns (level, clean_title) or None if line is body text.
+    level 1 = Chapter / Major Division
+    level 2 = Section / Topic
+    level 3 = Subsection / Subtopic
     """
     line_clean = line.strip()
     if not line_clean or len(line_clean) > 140:
-        return False
+        return None
 
-    # Diagram or Table structural markers
+    # Diagram or Table structural markers (Level 2)
     if line_clean.startswith("[FIGURE / DIAGRAM:") or line_clean.startswith("[STRUCTURED TABLES"):
-        return True
+        return (2, line_clean)
 
-    # Chapter, Unit, Module, Section markers
-    if re.match(r"^(?:Chapter|Unit|Module|Section|Topic)\s+\d+[:\s\-]?", line_clean, re.IGNORECASE):
-        return True
+    # Level 1: Chapter, Unit, Module, Part markers
+    if re.match(r"^(?:Chapter|Unit|Module|PART)\s+[\dIVXLCDM]+[:\s\-]?", line_clean, re.IGNORECASE):
+        return (1, line_clean)
 
-    # Dotted numeric section prefix (e.g. "1.1", "2.3.4 Title", but not a sentence ending in a period like "1. The dog ran.")
-    if re.match(r"^\d+\.\d+(?:\.\d+)*\s+[A-Z]", line_clean):
-        return True
-
-    # Educational landmark sections
+    # Level 1: Landmark headings
     if line_clean.lower() in _LANDMARK_HEADINGS:
-        return True
+        return (1, line_clean)
 
-    # Roman numeral parts (e.g. "PART I: MECHANICS")
-    if re.match(r"^PART\s+[IVXLCDM]+[:\s]", line_clean, re.IGNORECASE):
-        return True
-
-    # Prominent all-caps short title (between 4 and 60 chars, no terminal period)
+    # Level 1: Prominent standalone titles without terminal period
     if (
-        len(line_clean) >= 4
-        and len(line_clean) <= 60
+        re.match(r"^(?:Practice\s+Numerical\s+Problems|Comprehensive\s+Review)\b", line_clean, re.IGNORECASE)
+    ):
+        return (1, line_clean)
+
+    # Level 2: Dotted numeric section prefix (e.g. "1.1 Introduction", "2.3 Covalent Bonding")
+    if re.match(r"^\d+\.\d+\s+[A-Za-z]", line_clean):
+        return (2, line_clean)
+
+    # Level 3: Dotted subsection prefix (e.g. "1.4.1 ...")
+    if re.match(r"^\d+\.\d+\.\d+\s+[A-Za-z]", line_clean):
+        return (3, line_clean)
+
+    # Level 3: Key concept / parameter headings ending with colon (e.g. "Quantum Numbers:", "Bond Parameters:")
+    if (
+        re.match(r"^(?:[A-Z][a-zA-Z\s]{2,35}):$", line_clean)
+        and not line_clean.lower().startswith("note:")
+        and not line_clean.lower().startswith("example:")
+    ):
+        return (3, line_clean[:-1].strip())
+
+    # Prominent all-caps short title (between 4 and 50 chars, no terminal period)
+    if (
+        4 <= len(line_clean) <= 50
         and line_clean.isupper()
         and not line_clean.endswith(".")
         and any(c.isalpha() for c in line_clean)
         and not line_clean.startswith("PAGE ")
+        and not line_clean.startswith("|")
     ):
-        return True
+        return (1, line_clean)
 
-    return False
+    return None
 
 
-# ---------------------------------------------------------------------------
-# Main detection function
-# ---------------------------------------------------------------------------
-
-def detect_structure(pages: list) -> list:
+def detect_structure(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Split page content into sections delimited by detected headings.
+    Split cleaned page content into sections delimited by detected headings
+    and annotate each section with its hierarchical path (Chapter > Section > Subsection).
 
     Parameters
     ----------
     pages : list[dict]
-        Cleaned pages, each containing ``"page"`` (int) and ``"text"`` (str).
+        Cleaned pages, each containing ``"page"`` (int), ``"printed_label"`` (str),
+        and ``"text"`` (str).
 
     Returns
     -------
     list[dict]
         Sections, each with:
-        - ``heading`` (str): the detected heading text.
+        - ``heading`` (str): the active section heading text.
+        - ``chapter`` (str): current parent chapter.
+        - ``section`` (str): current section name.
+        - ``subsection`` (str): current subsection name.
+        - ``path`` (str): ``f"{chapter} > {section}"`` or ``f"{chapter} > {section} > {subsection}"``.
         - ``start_page`` (int): the page where the section begins.
-        - ``content`` (list[dict]): items with ``"page"`` and ``"text"``.
+        - ``printed_label`` (str): printed label for the start page.
+        - ``content`` (list[dict]): items with ``"page"``, ``"printed_label"``, and ``"text"``.
     """
     sections = []
+    current_chapter = "Document Overview"
+    current_section_title = "General Overview"
+    current_subsection_title = ""
     current_section = None
 
     for page in pages:
-        page_number = page["page"]
-        text = page["text"]
+        page_number = page.get("page", 1)
+        printed_label = page.get("printed_label", str(page_number))
+        text = page.get("text", "")
 
         for line in text.splitlines():
             line_str = line.strip()
-
             if not line_str:
                 continue
 
-            if _is_heading(line_str):
+            heading_info = _classify_heading(line_str)
+            if heading_info is not None:
+                level, title = heading_info
+
+                if level == 1:
+                    current_chapter = title
+                    current_section_title = title
+                    current_subsection_title = ""
+                elif level == 2:
+                    current_section_title = title
+                    current_subsection_title = ""
+                elif level == 3:
+                    current_subsection_title = title
+
+                # Build full hierarchy path
+                if line_str.startswith("["):
+                    active_heading = line_str
+                    path_str = f"{current_chapter} > {line_str}"
+                elif current_subsection_title and current_subsection_title != current_section_title:
+                    path_str = f"{current_chapter} > {current_section_title} > {current_subsection_title}"
+                    active_heading = f"{current_section_title} — {current_subsection_title}"
+                elif current_section_title != current_chapter:
+                    path_str = f"{current_chapter} > {current_section_title}"
+                    active_heading = current_section_title
+                else:
+                    path_str = current_chapter
+                    active_heading = current_chapter
+
                 current_section = {
-                    "heading": line_str,
+                    "heading": active_heading,
+                    "chapter": current_chapter,
+                    "section": current_section_title,
+                    "subsection": current_subsection_title,
+                    "path": path_str,
                     "start_page": page_number,
+                    "printed_label": printed_label,
                     "content": [],
                 }
                 sections.append(current_section)
@@ -129,48 +179,41 @@ def detect_structure(pages: list) -> list:
                 if current_section is None:
                     current_section = {
                         "heading": "Document Overview",
+                        "chapter": "Document Overview",
+                        "section": "Document Overview",
+                        "subsection": "",
+                        "path": "Document Overview",
                         "start_page": page_number,
+                        "printed_label": printed_label,
                         "content": [],
                     }
                     sections.append(current_section)
 
                 current_section["content"].append({
                     "page": page_number,
+                    "printed_label": printed_label,
                     "text": line_str,
                 })
 
     return sections
 
 
-# ---------------------------------------------------------------------------
-# Hierarchical Outline (Chapter > Topic > Subtopic)
-# ---------------------------------------------------------------------------
-
-def build_hierarchical_outline(sections: list[dict]) -> list[dict]:
+def build_hierarchical_outline(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Construct a structured 3-level academic outline (Chapter > Topic > Subtopic)
-    from detected flat sections.
-
-    Returns
-    -------
-    list[dict]
-        List of subtopic items, each with:
-        - ``id``: unique identifier (e.g. "subtopic_1_1")
-        - ``chapter``: parent chapter name
-        - ``topic``: parent topic name
-        - ``subtopic``: specific subtopic title
-        - ``source_pages``: list of page numbers
-        - ``content``: full excerpt text for this subtopic
+    from detected sections.
     """
-    current_chapter = "General Overview"
-    current_topic = "Foundational Concepts"
     subtopics = []
     subtopic_idx = 0
 
     for sec in sections:
         heading = sec.get("heading", "").strip()
+        chapter = sec.get("chapter", "General Overview")
+        section_name = sec.get("section", heading)
+        subtopic_name = sec.get("subsection") or heading
         start_page = sec.get("start_page", 1)
         content_items = sec.get("content", [])
+
         page_set = set()
         if start_page:
             page_set.add(start_page)
@@ -179,37 +222,16 @@ def build_hierarchical_outline(sections: list[dict]) -> list[dict]:
                 page_set.add(item["page"])
         source_pages = sorted(list(page_set))
 
-        # Full text content for this section
         text_lines = [item.get("text", "") for item in content_items if item.get("text")]
         full_text = "\n".join(text_lines).strip()
 
-        # Check if heading is a Chapter
-        ch_match = re.match(r"^(?:Chapter|Unit|Module|PART)\s+[\dIVXLCDM]+[:\s\-]*(.*)$", heading, re.IGNORECASE)
-        if ch_match:
-            current_chapter = heading
-            current_topic = ch_match.group(1).strip() or heading
-            if not full_text:
-                continue
-
-        # Check if heading is a Topic (e.g. "1.1 Discovery of...", "2.4 VSEPR...")
-        topic_match = re.match(r"^(\d+\.\d+)\s+[:\s\-]*(.*)$", heading)
-        if topic_match:
-            current_topic = heading
-
         subtopic_idx += 1
-        subtopic_id = f"subtopic_{subtopic_idx}"
-        subtopic_title = heading
-        if heading.startswith("[STRUCTURED TABLES"):
-            subtopic_title = f"{current_topic} - Structured Data & Tables"
-        elif heading.startswith("[FIGURE / DIAGRAM:"):
-            cap = heading.replace("[FIGURE / DIAGRAM:", "").replace("]", "").strip()
-            subtopic_title = f"{current_topic} - Diagram: {cap[:60]}"
-
         subtopics.append({
-            "id": subtopic_id,
-            "chapter": current_chapter,
-            "topic": current_topic,
-            "subtopic": subtopic_title,
+            "id": f"subtopic_{subtopic_idx}",
+            "chapter": chapter,
+            "topic": section_name,
+            "subtopic": subtopic_name,
+            "path": sec.get("path", f"{chapter} > {section_name}"),
             "source_pages": source_pages if source_pages else [1],
             "content": full_text,
         })

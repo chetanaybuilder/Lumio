@@ -11,15 +11,19 @@ Capabilities:
    - Encryption / password-protection detection (raises ``PDFEncryptedError``).
    - Corrupted or unparseable document detection (raises ``PDFCorruptedError``).
    - Page count limit enforcement (raises ``PDFPageLimitError``).
-2. **Diagram, Figure & Visual Understanding**:
-   - Extracts embedded images and vector drawing paths (chemical bonds, circuits, axes).
-   - Locates figure captions (e.g., "Figure 1.2: ...", "Fig. 3", "Scheme 4", "Diagram:").
-   - Synthesizes explicit visual context tags ``[FIGURE / DIAGRAM (Page X): ...]``
-     so downstream RAG and LLM prompts understand all visual learning material.
-3. **Table Structure Preservation**:
-   - Converts structured tabular data into clean Markdown tables rather than
-     flattening into disconnected lines of numbers.
-4. **Scanned / Image-Only Document Detection**:
+2. **Layout-Aware Text & Reading Order**:
+   - Preserves logical reading order across blocks and columns.
+   - Detects and removes running headers, footers, and repeated page numbers.
+   - Preserves both physical `pdf_page_index` and `printed_label`.
+3. **Table Structure Preservation & Deduplication**:
+   - Converts structured tabular data into clean Markdown tables.
+   - Resolves table continuation across page boundaries with header inheritance.
+   - Excludes table bounding boxes from raw text extraction so table cells are
+     never duplicated in body prose.
+4. **Diagram, Figure & Visual Understanding**:
+   - Locates figure captions (e.g., "Figure 1.2: ...", "Fig. 3", "Scheme 4").
+   - Synthesizes explicit visual context tags ``[FIGURE / DIAGRAM (Page X): ...]``.
+5. **Scanned / Image-Only Document Detection**:
    - Detects scanned documents with zero or negligible selectable text.
    - Raises ``PDFScannedError`` with specific affected page numbers instead of
      falsely reporting success on empty content.
@@ -45,7 +49,7 @@ except ImportError:
     PdfReadError = Exception
 
 from app.config import MAX_PDF_PAGES
-from app.text_preprocessor import check_page_quality
+from app.text_preprocessor import check_page_quality, repair_chemistry_notation
 
 logger = logging.getLogger("lumio.pdf_extractor")
 
@@ -71,35 +75,101 @@ class PDFScannedError(ValueError):
 
 
 # ---------------------------------------------------------------------------
-# Helper: format tables as Markdown
+# Helper: format tables as Markdown with cell cleaning
 # ---------------------------------------------------------------------------
 
-def _table_to_markdown(rows: list[list[str | None]]) -> str:
-    """Convert extracted 2D table cells into a clean Markdown table string."""
-    if not rows or len(rows) < 1:
+def _clean_table_cell(cell: str | None) -> str:
+    """Normalize whitespace, repair chemistry notation, and fix broken decimal points in table cells."""
+    if not cell:
         return ""
+    text = repair_chemistry_notation(str(cell).strip())
+    # Fix broken decimal points from layout line breaks, e.g. "1095°\n." -> "109.5°"
+    text = re.sub(r"(\d+)5°\s*\n?\s*\.", r"\1.5°", text)
+    text = re.sub(r"(\d+)°\s*\n?\s*\.", r"\1.°", text)
+    text = re.sub(r"(\d+)\s*\n?\s*\.", r"\1.", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _table_to_markdown(rows: list[list[str | None]], inherited_headers: list[str] | None = None) -> tuple[str, list[str]]:
+    """
+    Convert extracted 2D table cells into a clean Markdown table string.
+    Returns (markdown_table_string, table_header_columns).
+    """
+    if not rows or len(rows) < 1:
+        return "", []
 
     cleaned_rows = [
-        [re.sub(r"\s+", " ", str(cell or "").strip()) for cell in row]
+        [_clean_table_cell(cell) for cell in row]
         for row in rows
     ]
     if not any(any(cell for cell in row) for row in cleaned_rows):
-        return ""
+        return "", []
 
-    headers = cleaned_rows[0]
-    col_count = len(headers)
+    first_row = cleaned_rows[0]
+    col_count = len(first_row)
     if col_count == 0:
-        return ""
+        return "", []
+
+    # Detect if first row is a header or data row
+    is_continuation = False
+    if inherited_headers and len(inherited_headers) == col_count:
+        num_numeric_or_short = sum(1 for c in first_row if c.isdigit() or len(c) <= 2)
+        if num_numeric_or_short >= max(1, col_count // 3):
+            is_continuation = True
+
+    if is_continuation:
+        headers = inherited_headers
+        data_rows = cleaned_rows
+    else:
+        headers = first_row
+        data_rows = cleaned_rows[1:]
 
     lines = [
         "| " + " | ".join(headers) + " |",
-        "| " + " | ".join(["---"] * col_count) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
     ]
-    for row in cleaned_rows[1:]:
-        padded_row = row + [""] * (col_count - len(row))
-        lines.append("| " + " | ".join(padded_row[:col_count]) + " |")
+    for row in data_rows:
+        padded_row = row + [""] * (len(headers) - len(row))
+        lines.append("| " + " | ".join(padded_row[:len(headers)]) + " |")
 
-    return "\n" + "\n".join(lines) + "\n"
+    return "\n" + "\n".join(lines) + "\n", headers
+
+
+# ---------------------------------------------------------------------------
+# Recurring Header & Footer Detection
+# ---------------------------------------------------------------------------
+
+def _detect_recurring_headers_footers(doc) -> set[str]:
+    """
+    Identify lines that recur across 30%+ of pages near page margins
+    (e.g. running headers, book titles, page number stamps).
+    """
+    line_counts = {}
+    total_pages = len(doc)
+    if total_pages < 3:
+        return set()
+
+    for page_idx in range(total_pages):
+        page = doc[page_idx]
+        rect = page.rect
+        blocks = page.get_text("blocks")
+        seen_on_page = set()
+        for b in blocks:
+            bx0, by0, bx1, by1, btext, bno, btype = b
+            if btype != 0:
+                continue
+            # Look in top 12% and bottom 12%
+            if by1 <= rect.height * 0.12 or by0 >= rect.height * 0.88:
+                for line in btext.splitlines():
+                    clean_line = line.strip()
+                    if clean_line and len(clean_line) < 80 and clean_line not in seen_on_page:
+                        seen_on_page.add(clean_line)
+                        line_counts[clean_line] = line_counts.get(clean_line, 0) + 1
+
+    threshold = max(2, int(total_pages * 0.30))
+    recurring = {line for line, count in line_counts.items() if count >= threshold}
+    return recurring
 
 
 # ---------------------------------------------------------------------------
@@ -119,45 +189,105 @@ def _extract_with_pymupdf(pdf_path: str) -> list[dict]:
                 f"PDF has {total_pages} pages, which exceeds the limit of {MAX_PDF_PAGES} pages."
             )
 
+        # 1. Document Table of Contents
+        doc_toc = doc.get_toc() or []
+
+        # 2. Detect recurring running headers/footers to filter out
+        recurring_lines = _detect_recurring_headers_footers(doc)
+
         pages = []
         scanned_candidate_pages = []
+        prev_table_headers = None
 
         for page_idx in range(total_pages):
             page = doc[page_idx]
             page_no = page_idx + 1
 
-            raw_text = page.get_text("text") or ""
+            # Printed page label (e.g. "1", "2", "iv")
+            try:
+                printed_label = page.get_label() or str(page_no)
+            except Exception:
+                printed_label = str(page_no)
+
             images = page.get_images()
             drawings = page.get_drawings()
 
-            # Check for figure/diagram captions
-            figure_captions = []
-            for line in raw_text.splitlines():
-                line_str = line.strip()
-                if re.match(r"^(?:Figure|Fig\.|Diagram|Scheme|Illustration|Chart|Plot)\s*[\d\.\-:]*\s*", line_str, re.IGNORECASE):
-                    if len(line_str) > 3:
-                        figure_captions.append(line_str)
+            # 3. Layout-aware Table Extraction
+            table_rects = []
+            table_items = []
+            current_page_headers = None
 
-            # Detect and extract structured tables
-            table_markdown_blocks = []
             try:
                 tabs = page.find_tables()
                 if tabs and tabs.tables:
                     for t in tabs.tables:
-                        md = _table_to_markdown(t.extract())
-                        if md:
-                            table_markdown_blocks.append(md)
+                        extracted = t.extract()
+                        if not extracted:
+                            continue
+                        table_md, headers = _table_to_markdown(extracted, inherited_headers=prev_table_headers)
+                        if table_md:
+                            table_rects.append(t.bbox)
+                            table_items.append((t.bbox[1], t.bbox[0], table_md))
+                            if headers:
+                                current_page_headers = headers
             except Exception as e:
                 logger.debug("Table detection skipped on page %d: %s", page_no, e)
 
-            # Build page text content
-            content_parts = []
+            if current_page_headers:
+                prev_table_headers = current_page_headers
 
-            # If page has diagrams, drawings, or images, add explicit visual context markers
+            # 4. Extract Text Blocks outside table bounding boxes in reading order
+            blocks = page.get_text("blocks")
+            block_items = []
+            figure_captions = []
+            raw_text_parts = []
+
+            for b in blocks:
+                bx0, by0, bx1, by1, btext, bno, btype = b
+                if btype != 0:
+                    continue
+
+                btext_clean = btext.strip()
+                if not btext_clean:
+                    continue
+
+                raw_text_parts.append(btext_clean)
+
+                # Check if block overlaps significantly with any extracted table
+                overlaps_table = False
+                for tx0, ty0, tx1, ty1 in table_rects:
+                    v_overlap = max(0, min(by1, ty1) - max(by0, ty0))
+                    if v_overlap > (by1 - by0) * 0.40:
+                        overlaps_table = True
+                        break
+
+                if overlaps_table:
+                    continue
+
+                # Filter out recurring headers and footers
+                lines = btext_clean.splitlines()
+                filtered_lines = [ln.strip() for ln in lines if ln.strip() not in recurring_lines]
+                if not filtered_lines:
+                    continue
+
+                block_text = "\n".join(filtered_lines)
+
+                # Check for figure/diagram captions
+                for line_str in filtered_lines:
+                    if re.match(r"^(?:Figure|Fig\.|Diagram|Scheme|Illustration|Chart|Plot)\s*[\d\.\-:]*\s*", line_str, re.IGNORECASE):
+                        if len(line_str) > 3:
+                            figure_captions.append(line_str)
+
+                block_items.append((by0, bx0, block_text))
+
+            # 5. Combine block items and tables in true vertical reading order
+            all_content_items = sorted(block_items + table_items, key=lambda item: (item[0], item[1]))
+
+            content_parts = []
             if figure_captions:
                 for cap in figure_captions:
                     content_parts.append(f"\n[FIGURE / DIAGRAM: {cap}]\n")
-            elif images or drawings:
+            elif (len(images) > 0 or len(drawings) >= 4) and not table_items:
                 visual_desc = []
                 if len(images) > 0:
                     visual_desc.append(f"{len(images)} illustration(s)/diagram image(s)")
@@ -166,35 +296,33 @@ def _extract_with_pymupdf(pdf_path: str) -> list[dict]:
                 if visual_desc:
                     content_parts.append(f"\n[VISUAL ELEMENTS DETECTED (Page {page_no}): {', '.join(visual_desc)}]\n")
 
-            content_parts.append(raw_text)
+            for item in all_content_items:
+                content_parts.append(item[2])
 
-            if table_markdown_blocks:
-                content_parts.append("\n[STRUCTURED TABLES (Page " + str(page_no) + ")]:\n")
-                content_parts.extend(table_markdown_blocks)
-
-            full_page_text = "\n".join(content_parts).strip()
+            full_page_text = "\n\n".join(content_parts).strip()
+            raw_page_text = "\n".join(raw_text_parts).strip()
 
             # Evaluate extracted page quality
-            quality = check_page_quality(raw_text)
-
-            # Track scanned or low-quality candidate pages
+            quality = check_page_quality(raw_page_text or full_page_text)
             if not quality["is_valid"]:
                 scanned_candidate_pages.append(page_no)
 
             pages.append({
                 "page": page_no,
+                "printed_label": printed_label,
                 "text": full_page_text,
-                "raw_text": raw_text,
+                "raw_text": raw_page_text,
                 "has_diagram": bool(figure_captions or images or len(drawings) >= 4),
                 "image_count": len(images),
                 "drawing_count": len(drawings),
                 "quality": quality,
                 "captions": figure_captions,
+                "toc": doc_toc if page_idx == 0 else None,
             })
 
         # Validate overall extraction quality against raw extracted text
-        total_raw_text_chars = sum(len(doc[i].get_text("text").strip()) for i in range(total_pages))
-        if total_raw_text_chars < 50 and scanned_candidate_pages:
+        total_raw_text_chars = sum(len(p.get("raw_text", "")) for p in pages)
+        if total_raw_text_chars < 50 or (len(scanned_candidate_pages) == total_pages and total_pages > 0):
             pages_str = ", ".join(map(str, scanned_candidate_pages[:10]))
             raise PDFScannedError(
                 f"This PDF appears to contain scanned pages or photos without selectable digital text (pages: {pages_str}). "
@@ -232,36 +360,42 @@ def _extract_with_pypdf(pdf_path: str) -> list[dict]:
         except Exception:
             text = ""
 
-        # Search for figure captions in extracted text
         captions = []
         for line in text.splitlines():
             line_str = line.strip()
             if re.match(r"^(?:Figure|Fig\.|Diagram|Scheme|Illustration|Chart)\s*[\d\.\-:]*\s*", line_str, re.IGNORECASE):
                 captions.append(line_str)
 
-        has_images = bool(page.images and len(page.images) > 0)
-        content = text
+        content_parts = []
         if captions:
-            content = "\n" + "\n".join(f"[FIGURE / DIAGRAM: {c}]" for c in captions) + "\n" + content
-        elif has_images:
-            content = f"\n[VISUAL ELEMENTS DETECTED (Page {page_number})]\n" + content
+            for cap in captions:
+                content_parts.append(f"\n[FIGURE / DIAGRAM: {cap}]\n")
+        content_parts.append(text)
 
-        if len(text.strip()) < 15 and has_images:
+        full_text = "\n".join(content_parts).strip()
+        quality = check_page_quality(text)
+        if not quality["is_valid"]:
             scanned_pages.append(page_number)
 
         pages.append({
             "page": page_number,
-            "text": content,
+            "printed_label": str(page_number),
+            "text": full_text,
             "raw_text": text,
-            "has_diagram": bool(captions or has_images),
-            "image_count": len(page.images) if page.images else 0,
+            "has_diagram": bool(captions),
+            "image_count": len(getattr(page, "images", [])),
             "drawing_count": 0,
+            "quality": quality,
+            "captions": captions,
+            "toc": [],
         })
 
-    total_raw_chars = sum(len(p.get("raw_text", "").strip()) for p in pages)
-    if total_raw_chars < 50 and scanned_pages:
+    total_chars = sum(len(p["raw_text"]) for p in pages)
+    if total_chars < 50 or (len(scanned_pages) == len(pages) and len(pages) > 0):
+        pages_str = ", ".join(map(str, scanned_pages[:10]))
         raise PDFScannedError(
-            f"This PDF appears to contain scanned pages without digital text (pages: {', '.join(map(str, scanned_pages[:10]))})."
+            f"This PDF appears to contain scanned pages or photos without selectable digital text (pages: {pages_str}). "
+            "Please upload a document with digital text or run OCR before uploading."
         )
 
     return pages
@@ -277,33 +411,11 @@ def extract_text_from_pdf(pdf_path: str) -> list[dict]:
 
     Uses PyMuPDF for rich layout, table, drawing, and diagram extraction,
     falling back to pypdf if PyMuPDF encounters an unexpected error.
-
-    Parameters
-    ----------
-    pdf_path : str
-        Filesystem path to the PDF.
-
-    Returns
-    -------
-    list[dict]
-        List of ``{"page": int, "text": str, "has_diagram": bool, ...}``.
-
-    Raises
-    ------
-    PDFPageLimitError
-        If page count exceeds ``MAX_PDF_PAGES``.
-    PDFEncryptedError
-        If the document is password-protected.
-    PDFScannedError
-        If the document contains only scanned photos without text.
-    PDFCorruptedError
-        If the file cannot be parsed.
     """
     path_obj = Path(pdf_path)
     if not path_obj.exists() or path_obj.stat().st_size == 0:
         raise PDFCorruptedError("The uploaded file is empty or missing.")
 
-    # Validate signature header
     with open(pdf_path, "rb") as f:
         header = f.read(1024)
         if b"%PDF-" not in header:

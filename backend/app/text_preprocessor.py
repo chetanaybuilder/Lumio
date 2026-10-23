@@ -3,17 +3,17 @@ Text Preprocessor — Lumio Backend
 ==================================
 
 Normalizes raw text extracted from PDF pages so that downstream modules
-(structure detection, chunking, embedding) receive consistently formatted,
-clean input.
+(structure detection, chunking, embedding, LLM prompting) receive clean,
+consistently formatted input while strictly preserving scientific notation.
 
 Pipeline:
 1. Normalizes unicode characters, scientific notation, and encoding artifacts
-   (e.g., replaces replacement characters near degree values, superscripts,
-   standardizes smart quotes and dashes).
-2. Collapses excessive horizontal whitespace (tabs, repeated spaces).
-3. Strips leading and trailing whitespace from every line.
-4. Preserves structural Markdown tables, diagram markers, and lists.
-5. Limits excessive vertical blank lines while preserving paragraph boundaries.
+   (preserves Greek letters α, β, π, λ, Δ; superscripts ² ³, subscripts ₂ ₃,
+   arrows → ⇌, relations ≥ ≤ ≈, units, standardizes smart quotes and dashes).
+2. Reconstructs damaged chemistry and math font encoding artifacts.
+3. Fixes hyphenated line-breaks and soft wraps while keeping paragraph boundaries.
+4. Collapses excessive horizontal whitespace while preserving Markdown tables.
+5. Limits vertical blank lines while preserving paragraph boundaries.
 """
 
 import re
@@ -26,7 +26,7 @@ def _normalize_symbols(text: str) -> str:
     """Normalize common OCR/PDF encoding glitches and scientific symbols."""
     # Convert degree replacement characters like 180 or 109.5 into °
     text = re.sub(r"(\d+(?:\.\d+)?)\s*\ufffd", r"\1°", text)
-    text = re.sub(r"(\d+(?:\.\d+)?)\s*\?", r"\1°", text)  # Common fallback for degree
+    text = re.sub(r"(\d+(?:\.\d+)?)\s*\?", r"\1°", text)
 
     # Normalize hybrid orbital notations like sp -> sp² or sp³
     text = re.sub(r"sp\ufffd", "sp²", text)
@@ -39,6 +39,9 @@ def _normalize_symbols(text: str) -> str:
     text = text.replace("\u2022", "* ")  # Bullet point
     text = text.replace("\u00a0", " ")   # Non-breaking space
 
+    # Mathematical minus sign (\u2212) -> standardize to hyphen-minus or keep for display
+    text = text.replace("\u2212", "-")
+
     # Normalize any remaining unprintable control characters (except \n, \r, \t)
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
 
@@ -46,29 +49,171 @@ def _normalize_symbols(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Scientific symbol, subscript, and Greek letter normalization
+# Chemistry and mathematical notation repair
 # ---------------------------------------------------------------------------
 
-_GREEK_AND_MATH_MAP = {
-    # Greek letters
-    "\u03b1": "alpha", "\u03b2": "beta", "\u03b3": "gamma", "\u03b4": "delta",
-    "\u0394": "Delta", "\u03b5": "epsilon", "\u03b8": "theta", "\u03bb": "lambda",
-    "\u03bc": "mu", "\u03bd": "nu", "\u03c0": "pi", "\u03c1": "rho",
-    "\u03c3": "sigma", "\u03c4": "tau", "\u03c6": "phi", "\u03c8": "psi", "\u03c9": "omega",
-    # Arrows and relations
-    "\u2192": " -> ", "\u21cc": " <=> ", "\u2194": " <-> ", "\u21d2": " => ",
-    "\u2264": " <= ", "\u2265": " >= ", "\u2260": " != ", "\u2248": " ~= ",
-    "\u00b1": " +/- ", "\u00d7": " x ", "\u2212": "-",
-    # Common superscripts & subscripts
-    "\u2070": "^0", "\u00b9": "^1", "\u00b2": "^2", "\u00b3": "^3",
-    "\u2074": "^4", "\u2075": "^5", "\u2076": "^6", "\u2077": "^7", "\u2078": "^8", "\u2079": "^9",
-    "\u207a": "^+", "\u207b": "^-",
-    "\u2080": "_0", "\u2081": "_1", "\u2082": "_2", "\u2083": "_3",
-    "\u2084": "_4", "\u2085": "_5", "\u2086": "_6", "\u2087": "_7", "\u2088": "_8", "\u2089": "_9",
-}
+def repair_chemistry_notation(text: str) -> str:
+    """
+    Reconstruct chemical and mathematical formulas affected by font-encoding
+    artifacts (e.g. Type 1 ZapfDingbats/Symbol fallbacks in legacy PDF generators).
+    Preserves true subscripts, superscripts, arrows, and charges.
+    """
+    replacements = [
+        # Tables and electron pairs
+        (r"\bTotal\s*eI\s*pairs\b", "Total e⁻ pairs"),
+        (r"\bTotaleIpairs\b", "Total e⁻ pairs"),
+        (r"\bBondingpairs\b", "Bonding pairs"),
+        (r"\bLonepairs\b", "Lone pairs"),
+        (r"\bTrigonalplanar\b", "Trigonal planar"),
+        (r"\bTrigonalpyramidal\b", "Trigonal pyramidal"),
+        (r"\bTrigonalbipyramidal\b", "Trigonal bipyramidal"),
+        (r"\bBondAngle\b", "Bond Angle"),
 
-# Core dictionary of common English words + STEM academic terminology for quality verification
+        # Common molecular formulas with subscript artifacts
+        (r"\bBeClI\b", "BeCl₂"),
+        (r"\bBFI\b", "BF₃"),
+        (r"\bCHI\b", "CH₄"),
+        (r"\bNHI\b", "NH₃"),
+        (r"\bHIO\b", "H₂O"),
+        (r"\bPClI\b", "PCl₅"),
+        (r"\bSFI\b", "SF₆"),
+        (r"\bSOI\b", "SO₂"),
+        (r"\bOI\b", "O₂"),
+        (r"\bNI\b", "N₂"),
+        (r"\bCOI\b", "CO₂"),
+        (r"\bCIHI\b", "C₂H₄"),
+        (r"\bCIHIIOI\b", "C₆H₁₂O₆"),
+
+        # Ions, electrons, and coefficients
+        (r"\beI\b", "e⁻"),
+        (r"\bNaI\b", "Na⁺"),
+        (r"\bClI\b", "Cl⁻"),
+        (r"\bOHI\b", "OH⁻"),
+        (r"\bMnOII\b", "MnO₄⁻"),
+        (r"(\d+)?\s*Fe²I\b", lambda m: f"{m.group(1) or ''}Fe²⁺"),
+        (r"(\d+)?\s*Fe³I\b", lambda m: f"{m.group(1) or ''}Fe³⁺"),
+        (r"(\d+)?\s*Mn²I\b", lambda m: f"{m.group(1) or ''}Mn²⁺"),
+        (r"(\d+)?\s*Zn²I\b", lambda m: f"{m.group(1) or ''}Zn²⁺"),
+        (r"(\d+)?\s*Cu²I\b", lambda m: f"{m.group(1) or ''}Cu²⁺"),
+        (r"(\d+)?\s*HIO\b", lambda m: f"{m.group(1) or ''}H₂O"),
+        (r"\bAI\b", "A⁻"),
+
+        # Acid/base notation
+        (r"\[HI\]", "[H⁺]"),
+        (r"\[OHI\]", "[OH⁻]"),
+        (r"\[AI\]", "[A⁻]"),
+        (r"\bCHICOOH\b", "CH₃COOH"),
+        (r"\bCHICOOI\b", "CH₃COO⁻"),
+        (r"\bHNOI\b", "HNO₃"),
+        (r"\bHISOI\b", "H₂SO₄"),
+
+        # Powers of 10 and scientific notation
+        (r"10II\b", "10⁻⁷"),
+        (r"10I¹I\b", "10⁻¹⁴"),
+        (r"10I²³\b", "10⁻²³"),
+        (r"10I\s*m/s", "10⁷ m/s"),
+        (r"J\s*molI¹\s*KI¹", "J mol⁻¹ K⁻¹"),
+
+        # Gas law subscripts
+        (r"PIVI\s*=\s*PIVI", "P₁V₁ = P₂V₂"),
+        (r"VI/TI\s*=\s*VI/TI", "V₁/T₁ = V₂/T₂"),
+
+        # Equilibrium and quantum mechanics
+        (r"aA\s*\+\s*bB\s*I\s*cC\s*\+\s*dD", "aA + bB ⇌ cC + dD"),
+        (r"∆x\s*·\s*∆p\s*≥\s*I/2", "∆x · ∆p ≥ ħ/2"),
+        (r"∆x\s*\.\s*∆p\s*≥\s*I/2", "∆x · ∆p ≥ ħ/2"),
+        (r"2pI\b", "2p⁶"),
+        (r"3pI\b", "3p⁶"),
+        (r"3dI\b", "3d⁶"),
+        (r"3d¹I\b", "3d¹⁰"),
+        (r"HI\b(?=\s*\+)", "H⁺"),
+        (r"HI\b(?=\s*\(acidic\))", "H⁺"),
+        (r"(\b\w+)I\b(?=\s*\([a-z]+\))", r"\1⁺"),
+    ]
+
+    for pattern, repl in replacements:
+        if callable(repl):
+            text = re.sub(pattern, repl, text)
+        else:
+            text = re.sub(pattern, repl, text)
+
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Hyphenation and soft line wrap repair
+# ---------------------------------------------------------------------------
+
+def _fix_hyphenation_and_wraps(text: str) -> str:
+    """
+    Join hyphenated words broken across line breaks (e.g. 'struc-\\nture' -> 'structure')
+    and combine soft-wrapped lines belonging to the same paragraph without disturbing
+    Markdown tables, headings, or bulleted lists.
+    """
+    # 1. Fix explicit hyphenated line breaks: 'chemi-\ncal' -> 'chemical'
+    text = re.sub(r"([A-Za-z]{2,})-\n\s*([A-Za-z]{2,})", r"\1\2", text)
+
+    # 2. Join lines that don't end in sentence-ending punctuation or structural tokens
+    processed_lines = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            processed_lines.append("")
+            i += 1
+            continue
+
+        # Check if current line is a table, heading, diagram tag, or list bullet
+        is_structural = (
+            line.startswith("|")
+            or line.startswith("#")
+            or line.startswith("* ")
+            or line.startswith("- ")
+            or line.startswith("[")
+            or re.match(r"^\d+\.\s+", line)
+            or re.match(r"^(?:Chapter|Section|Unit|PART)\b", line, re.IGNORECASE)
+            or line.endswith(":")
+        )
+
+        if is_structural:
+            processed_lines.append(line)
+            i += 1
+            continue
+
+        # Accumulate paragraph text
+        para_parts = [line]
+        while i + 1 < len(lines):
+            next_line = lines[i + 1].strip()
+            if not next_line:
+                break
+            # Check if next line starts a new structure
+            next_is_structural = (
+                next_line.startswith("|")
+                or next_line.startswith("#")
+                or next_line.startswith("* ")
+                or next_line.startswith("- ")
+                or next_line.startswith("[")
+                or re.match(r"^\d+\.\s+", next_line)
+                or re.match(r"^(?:Chapter|Section|Unit|PART)\b", next_line, re.IGNORECASE)
+                or (len(para_parts[-1]) > 0 and para_parts[-1][-1] in (".", "?", "!"))
+            )
+            if next_is_structural:
+                break
+
+            para_parts.append(next_line)
+            i += 1
+
+        processed_lines.append(" ".join(para_parts))
+        i += 1
+
+    return "\n".join(processed_lines)
+
+
+# ---------------------------------------------------------------------------
+# Core vocabulary for quality check
+# ---------------------------------------------------------------------------
+
 _COMMON_VOCAB = {
     "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", "for", "on", "are",
     "as", "with", "his", "they", "i", "at", "be", "this", "have", "from", "or", "one", "had", "by",
@@ -98,14 +243,6 @@ def check_page_quality(text: str) -> dict:
     """
     Evaluate the quality of extracted text on a page.
     Detects whether a page has authentic text or requires OCR / vision fallback.
-
-    Returns
-    -------
-    dict
-        - ``is_valid`` (bool): True if quality meets standards.
-        - ``dictionary_ratio`` (float): Share of recognized words.
-        - ``weird_symbol_ratio`` (float): Ratio of abnormal characters.
-        - ``char_count`` (int): Length of non-whitespace text.
     """
     if not text:
         return {"is_valid": False, "dictionary_ratio": 0.0, "weird_symbol_ratio": 1.0, "char_count": 0, "reason": "empty"}
@@ -115,7 +252,6 @@ def check_page_quality(text: str) -> dict:
     if char_count < 30:
         return {"is_valid": False, "dictionary_ratio": 0.0, "weird_symbol_ratio": 0.0, "char_count": char_count, "reason": "too_short"}
 
-    # Extract all alphabetical words of length 2+
     words = [w.lower() for w in re.findall(r"[A-Za-z]{2,}", text)]
     if not words:
         return {"is_valid": False, "dictionary_ratio": 0.0, "weird_symbol_ratio": 1.0, "char_count": char_count, "reason": "no_words"}
@@ -123,17 +259,14 @@ def check_page_quality(text: str) -> dict:
     valid_words = sum(1 for w in words if w in _COMMON_VOCAB or len(w) > 4)
     dictionary_ratio = valid_words / len(words)
 
-    # Weird symbols (replacement \ufffd, control characters, bizarre non-ascii)
     weird_chars = len(re.findall(r"[\ufffd\x00-\x08\x0b\x0c\x0e-\x1f]", text))
     weird_symbol_ratio = weird_chars / max(1, char_count)
 
-    # Check for excessive unspaced letter chains or bizarre bracket density
-    unbalanced_brackets = abs(text.count("[") - text.count("]")) + abs(text.count("(") - text.count(")"))
     bracket_anomaly = (text.count("[") + text.count("]")) > 30 and (text.count(".") + text.count(",")) < 5
 
     is_valid = (
-        dictionary_ratio >= 0.55
-        and weird_symbol_ratio <= 0.10
+        dictionary_ratio >= 0.50
+        and weird_symbol_ratio <= 0.15
         and not bracket_anomaly
     )
 
@@ -154,29 +287,20 @@ def clean_text(text: str) -> str:
     """
     Normalize whitespace, encoding artifacts, and structure in a single page string.
     Preserves all real text, variables, formulas, and headings without destructive shifting.
-
-    Parameters
-    ----------
-    text : str
-        Raw text extracted from one PDF page.
-
-    Returns
-    -------
-    str
-        The cleaned text with normalized whitespace, symbols, and trimmed lines.
     """
     if not text:
         return ""
 
-    # Map Greek letters, math symbols, superscripts/subscripts
-    for orig, repl in _GREEK_AND_MATH_MAP.items():
-        if orig in text:
-            text = text.replace(orig, repl)
-
-    # Normalize scientific symbols and encoding glitches
+    # 1. Normalize encoding and scientific symbols
     text = _normalize_symbols(text)
 
-    # Collapse horizontal whitespace (tabs, multiple spaces) to one space,
+    # 2. Repair damaged chemistry notation (font encoding artifacts)
+    text = repair_chemistry_notation(text)
+
+    # 3. Fix hyphenated line breaks and soft wraps into clean paragraphs
+    text = _fix_hyphenation_and_wraps(text)
+
+    # 4. Collapse horizontal whitespace (tabs, multiple spaces) to one space,
     # preserving table rows and markdown structure cleanly.
     lines = []
     for line in text.splitlines():
@@ -201,19 +325,7 @@ def clean_text(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def clean_pages(pages: list) -> list:
-    """
-    Apply ``clean_text`` to every page in a list of page dictionaries.
-
-    Parameters
-    ----------
-    pages : list[dict]
-        Each item must contain ``"page"`` (int) and ``"text"`` (str).
-
-    Returns
-    -------
-    list[dict]
-        A new list with the same page numbers, cleaned text, and metadata preserved.
-    """
+    """Apply ``clean_text`` to every page in a list of page dictionaries."""
     cleaned_pages = []
     for page in pages:
         cleaned = dict(page)
