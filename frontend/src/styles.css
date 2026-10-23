@@ -792,4 +792,508 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   line-height: 1.65;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE OF CONTENTS SIDEBAR (46 Subtopics & Topics Tree)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.notes-index-sidebar {
+  width: 280px;
+  flex: 0 0 280px;
+  background: var(--paper, #fbfaf6);
+  border: 1px solid var(--line, #e5e1d7);
+  border-radius: 8px;
+  padding: 16px 14px;
+  position: sticky;
+  top: 90px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+}
+.toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line, #e5e1d7);
+}
+.toc-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--muted, #73766f);
+}
+.toc-count {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--orange, #e85d2a);
+  background: rgba(232, 93, 42, 0.08);
+  padding: 2px 7px;
+  border-radius: 12px;
+}
+.toc-search-wrap {
+  position: relative;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+.toc-search-icon {
+  position: absolute;
+  left: 9px;
+  color: #999c94;
+  pointer-events: none;
+}
+.toc-search-input {
+  width: 100%;
+  padding: 7px 26px 7px 29px;
+  border: 1px solid #d8d4ca;
+  border-radius: 5px;
+  background: #ffffff;
+  font-size: 11.5px;
+  color: var(--ink, #20231f);
+  outline: none;
+}
+.toc-search-input:focus {
+  border-color: var(--orange, #e85d2a);
+  box-shadow: 0 0 0 2px rgba(232, 93, 42, 0.15);
+}
+.toc-clear-btn {
+  position: absolute;
+  right: 7px;
+  border: 0;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+}
+.toc-items-scroll {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+}
+.toc-subtopic-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 5px;
+  text-decoration: none;
+  color: var(--ink, #20231f);
+  font-size: 12px;
+  line-height: 1.35;
+  transition: background 0.15s ease;
+}
+.toc-subtopic-link:hover {
+  background: rgba(232, 93, 42, 0.08);
+}
+.toc-item-number {
+  font-size: 10px;
+  font-weight: 700;
+  color: #a2aaa0;
+  min-width: 16px;
+  margin-top: 2px;
+}
+.toc-item-text {
+  flex: 1;
+  min-width: 0;
+}
+.toc-chapter-breadcrumb {
+  display: block;
+  font-size: 9.5px;
+  color: #8a8d85;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toc-subtopic-heading {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #2b2e2a;
+}
+.toc-page-pill {
+  font-size: 9.5px;
+  color: #888;
+  background: #eeebe3;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SUBTOPIC CARDS & COLLAPSIBLE ATOMIC CONCEPTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.subtopics-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+.subtopic-card {
+  border: 1px solid var(--anime-border, #e85d2a);
+  background: var(--paper, #fbfaf6);
+  border-radius: 8px;
+  box-shadow: 0 3px 12px var(--anime-glow, rgba(232,93,42,0.12));
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.subtopic-card:hover {
+  transform: translateY(-1px);
+}
+.subtopic-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  background: var(--anime-bg, rgba(232,93,42,0.04));
+  border-bottom: 1px solid var(--line, #e5e1d7);
+  cursor: pointer;
+  user-select: none;
+}
+.subtopic-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.subtopic-number {
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+}
+.subtopic-title-group {
+  min-width: 0;
+}
+.subtopic-breadcrumb {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted, #73766f);
+  margin-bottom: 2px;
+}
+.subtopic-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink, #20231f);
+  letter-spacing: -0.01em;
+}
+.subtopic-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.subtopic-page-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6a6f66;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+.subtopic-toggle-btn {
+  color: #6a6f66;
+  display: grid;
+  place-items: center;
+}
+.subtopic-card-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Callout Boxes inside Subtopics */
+.subtopic-box {
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.subtopic-box-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.subtopic-def-box {
+  background: #fdfaf3;
+  border-left: 3px solid #dfb744;
+}
+.subtopic-def-box .subtopic-box-label {
+  color: #9c7b1e;
+}
+.subtopic-box-content {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #2b2e2a;
+}
+.subtopic-exp-box {
+  background: #ffffff;
+  border: 1px solid #eae6dc;
+}
+.subtopic-exp-box .subtopic-box-label {
+  color: #555b50;
+}
+.subtopic-formula-box {
+  background: #f3f8f7;
+  border-left: 3px solid #347e72;
+}
+.subtopic-formula-box .subtopic-box-label {
+  color: #276258;
+}
+.subtopic-formulas-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.subtopic-formula-pill {
+  background: #ffffff;
+  border: 1px solid #cfdedc;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 14px;
+}
+.subtopic-example-box {
+  background: #fbf6f3;
+  border-left: 3px solid #e85d2a;
+}
+.subtopic-example-box .subtopic-box-label {
+  color: #b5451c;
+}
+.example-problem {
+  font-size: 13.5px;
+  margin-bottom: 8px;
+  color: #2b2e2a;
+}
+.example-solution {
+  font-size: 13px;
+  color: #3b4038;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(232, 93, 42, 0.15);
+}
+.subtopic-traps-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 768px) {
+  .subtopic-traps-row {
+    grid-template-columns: 1fr;
+  }
+}
+.trap-card {
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.trap-mistake {
+  background: #fdf5f4;
+  border-left: 3px solid #c84535;
+}
+.trap-mistake .trap-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #a02f21;
+  margin-bottom: 6px;
+}
+.trap-tip {
+  background: #f4f8f4;
+  border-left: 3px solid #4d9b71;
+}
+.trap-tip .trap-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2f6b4b;
+  margin-bottom: 6px;
+}
+.trap-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #333830;
+}
+.trap-list li {
+  margin-bottom: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QUICK NOTES CARDS (1-Screen Topic Revision)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.quick-topics-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+.quick-topic-card {
+  border: 1px solid var(--anime-border, #e85d2a);
+  background: var(--paper, #fbfaf6);
+  border-radius: 8px;
+  padding: 20px 22px;
+  box-shadow: 0 3px 12px var(--anime-glow, rgba(232,93,42,0.12));
+}
+.quick-topic-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line, #e5e1d7);
+}
+.quick-topic-badge {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 14px;
+}
+.quick-topic-titles {
+  flex: 1;
+  min-width: 0;
+}
+.quick-topic-chapter {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted, #73766f);
+}
+.quick-topic-name {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink, #20231f);
+}
+.quick-page-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #656a61;
+  background: #eeebe3;
+  padding: 3px 9px;
+  border-radius: 12px;
+}
+.quick-bullets-list {
+  margin: 0 0 14px 20px;
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #2b2e2a;
+}
+.quick-bullets-list li {
+  margin-bottom: 6px;
+}
+.quick-formulas-wrap {
+  margin: 12px 0;
+  background: #f3f8f7;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border-left: 3px solid #347e72;
+}
+.quick-subhead {
+  font-size: 10px;
+  font-weight: 700;
+  color: #276258;
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+.quick-formula-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quick-formula-pill {
+  background: #ffffff;
+  border: 1px solid #cfdedc;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 13.5px;
+}
+.quick-mnemonic-wrap {
+  margin-top: 14px;
+  background: #fdfaf3;
+  border-left: 3px solid #dfb744;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+.mnemonic-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9c7b1e;
+  margin-bottom: 4px;
+}
+.mnemonic-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #3b3528;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KATEX & TOOLBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.math-text-flow {
+  display: inline;
+}
+.katex-inline-wrapper {
+  display: inline-block;
+  margin: 0 2px;
+  vertical-align: -0.1em;
+}
+.katex-display-wrapper {
+  display: block;
+  margin: 10px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.raw-math-fallback {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+}
+.topline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expand-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d8d4ca;
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #40453f;
+  cursor: pointer;
+}
+.expand-all-btn:hover {
+  background: #faf7f0;
+  border-color: #bc7658;
+  color: #bd4f2c;
+}
+
 /* The warm paper and ember accents keep study materials expressive but legible. */

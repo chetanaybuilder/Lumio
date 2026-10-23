@@ -64,10 +64,54 @@ class NoteSection(BaseModel):
     source_pages: list[int] = Field(default_factory=list)
 
 
+class SubtopicNote(BaseModel):
+    """Detailed, structured notes for a single atomic subtopic."""
+    subtopic_id: str
+    chapter: str
+    topic: str
+    subtopic: str
+    source_pages: list[int] = Field(default_factory=list)
+    definition: str = ""
+    explanation: str = ""
+    formulas: list[str] = Field(default_factory=list)
+    worked_example: str = ""
+    comparison_table: str = ""
+    common_mistakes: list[str] = Field(default_factory=list)
+    exam_tips: list[str] = Field(default_factory=list)
+    figures: list[dict] = Field(default_factory=list)
+
+
+class DeepNotesOutput(BaseModel):
+    """Elite Deep Notes with granular subtopic breakdown and table of contents."""
+    title: str
+    subtopics: list[SubtopicNote] = Field(default_factory=list)
+    sections: list[NoteSection] = Field(default_factory=list)
+
+
+class TopicQuickNote(BaseModel):
+    """High-yield one-screen revision summary for a topic."""
+    topic_id: str
+    chapter: str
+    topic: str
+    source_pages: list[int] = Field(default_factory=list)
+    bullets: list[str] = Field(default_factory=list)
+    key_formulas: list[str] = Field(default_factory=list)
+    memory_trick: str = ""
+
+
+class QuickNotesOutput(BaseModel):
+    """Concise rapid revision deck structured per topic."""
+    title: str
+    topics: list[TopicQuickNote] = Field(default_factory=list)
+    sections: list[NoteSection] = Field(default_factory=list)
+
+
 class NotesOutput(BaseModel):
-    """Complete notes response containing a title and a list of sections."""
+    """Complete notes response containing title, sections, and optional rich subtopics."""
     title: str
     sections: list[NoteSection]
+    subtopics: list[SubtopicNote] = Field(default_factory=list)
+    topics: list[TopicQuickNote] = Field(default_factory=list)
 
 
 class QuizQuestion(BaseModel):

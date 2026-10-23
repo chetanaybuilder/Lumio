@@ -14,11 +14,12 @@
  * - **PDF export** — download any generated material as a styled PDF.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import katex from 'katex'
 import {
-  BookOpenText, BrainCircuit, Check, ChevronLeft, ChevronRight, CircleHelp,
-  Download, FileText, Flame, Layers3, LoaderCircle, Mail, MessageCircle, RotateCcw,
-  Send, Shuffle, Sparkles, Trash2, Upload, X,
+  BookOpenText, BrainCircuit, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  CircleHelp, Download, FileText, Flame, Layers3, LoaderCircle, Mail, MessageCircle,
+  RotateCcw, Search, Send, Shuffle, Sparkles, Trash2, Upload, X,
 } from 'lucide-react'
 import { closeSession, createSession, exportPdf, generate, getDocument, uploadDocument } from './api.js'
 
@@ -445,6 +446,7 @@ export default function App() {
             {!loadingWorkspace && (view === 'deep-notes' || view === 'quick-notes') && (
               <NotesPanel
                 material={materials[view]}
+                view={view}
                 onGenerate={() => openTool(view)}
                 actionLabel={`Generate ${view === 'deep-notes' ? 'deep notes' : 'quick notes'}`}
                 onCopy={() => navigator.clipboard?.writeText(
@@ -492,7 +494,59 @@ export default function App() {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FORMATTED CONTENT HELPER — Diagrams, Tables & Lists
+// KATEX MATH RENDERING COMPONENT — Inline ($...$) & Block ($$...$$)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function MathText({ text }) {
+  if (!text || typeof text !== 'string') return null
+
+  // Matches $$...$$ (display math) or $...$ (inline math)
+  const mathRegex = /(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g
+  const parts = text.split(mathRegex)
+
+  return (
+    <span className="math-text-flow">
+      {parts.map((part, index) => {
+        if (!part) return null
+        if (part.startsWith('$$') && part.endsWith('$$') && part.length >= 4) {
+          const rawMath = part.slice(2, -2).trim()
+          try {
+            const html = katex.renderToString(rawMath, { displayMode: true, throwOnError: false })
+            return (
+              <span
+                key={index}
+                className="katex-display-wrapper"
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            )
+          } catch (_) {
+            return <code key={index} className="raw-math-fallback">{part}</code>
+          }
+        }
+        if (part.startsWith('$') && part.endsWith('$') && part.length >= 2) {
+          const rawMath = part.slice(1, -1).trim()
+          try {
+            const html = katex.renderToString(rawMath, { displayMode: false, throwOnError: false })
+            return (
+              <span
+                key={index}
+                className="katex-inline-wrapper"
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            )
+          } catch (_) {
+            return <code key={index} className="raw-math-fallback">{part}</code>
+          }
+        }
+        return <span key={index}>{part}</span>
+      })}
+    </span>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FORMATTED CONTENT HELPER — Diagrams, Tables & Lists with KaTeX
 // ═══════════════════════════════════════════════════════════════════════════
 
 function FormattedContent({ content }) {
@@ -514,7 +568,7 @@ function FormattedContent({ content }) {
                 <span className="diagram-callout-icon">🎨</span>
                 <span className="diagram-callout-title">Visual & Diagram Analysis</span>
               </div>
-              <div className="diagram-callout-body">{cleanText}</div>
+              <div className="diagram-callout-body"><MathText text={cleanText} /></div>
             </div>
           )
         }
@@ -530,13 +584,13 @@ function FormattedContent({ content }) {
                 <table className="anime-table">
                   <thead>
                     <tr>
-                      {headerRow.map((col, i) => <th key={i}>{col}</th>)}
+                      {headerRow.map((col, i) => <th key={i}><MathText text={col} /></th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {dataRows.map((row, rIdx) => (
                       <tr key={rIdx}>
-                        {row.map((cell, cIdx) => <td key={cIdx}>{cell}</td>)}
+                        {row.map((cell, cIdx) => <td key={cIdx}><MathText text={cell} /></td>)}
                       </tr>
                     ))}
                   </tbody>
@@ -552,14 +606,14 @@ function FormattedContent({ content }) {
           return (
             <ul key={idx} className="formatted-list">
               {items.map((item, i) => (
-                <li key={i}>{item.replace(/^[\*\-]\s+/, '')}</li>
+                <li key={i}><MathText text={item.replace(/^[\*\-]\s+/, '')} /></li>
               ))}
             </ul>
           )
         }
 
         // 4. Regular paragraph
-        return <p key={idx} className="formatted-paragraph">{trimmed}</p>
+        return <p key={idx} className="formatted-paragraph"><MathText text={trimmed} /></p>
       })}
     </div>
   )
@@ -567,18 +621,262 @@ function FormattedContent({ content }) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// NOTES PANEL — Anime-bordered colorful study notes
+// SUBTOPIC CARD — Collapsible, Modular 10/10 Atomic Study Concept
 // ═══════════════════════════════════════════════════════════════════════════
 
-function NotesPanel({ material, onCopy, onGenerate, actionLabel }) {
+function SubtopicCard({ sub, index, expanded, onToggle, accent }) {
+  const exampleObj = typeof sub.worked_example === 'object' && sub.worked_example !== null
+    ? sub.worked_example
+    : (sub.worked_example ? { problem: sub.worked_example, solution: '' } : null)
+
+  return (
+    <section
+      className={`subtopic-card anime-section ${expanded ? 'is-expanded' : 'is-collapsed'}`}
+      id={`subtopic-${index}`}
+      style={{
+        '--anime-border': accent.border,
+        '--anime-bg': accent.bg,
+        '--anime-glow': accent.glow,
+      }}
+    >
+      {/* Header toggle bar */}
+      <div
+        className="subtopic-card-header"
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggle() }}
+      >
+        <div className="subtopic-header-left">
+          <span className="subtopic-number" style={{ background: accent.border }}>
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <div className="subtopic-title-group">
+            <span className="subtopic-breadcrumb">
+              {sub.chapter} {sub.topic && sub.topic !== sub.chapter ? `· ${sub.topic}` : ''}
+            </span>
+            <h3 className="subtopic-title">{sub.subtopic}</h3>
+          </div>
+        </div>
+
+        <div className="subtopic-header-right">
+          {sub.source_pages?.length > 0 && (
+            <span className="subtopic-page-badge" title="Source textbook page numbers">
+              📖 p.{sub.source_pages.join(', ')}
+            </span>
+          )}
+          <span className="subtopic-toggle-btn" aria-label={expanded ? 'Collapse section' : 'Expand section'}>
+            {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </span>
+        </div>
+      </div>
+
+      {/* Collapsible card body */}
+      {expanded && (
+        <div className="subtopic-card-body">
+          {/* 1. Formal Definition */}
+          {sub.definition && (
+            <div className="subtopic-box subtopic-def-box">
+              <div className="subtopic-box-label">📌 FORMAL DEFINITION</div>
+              <div className="subtopic-box-content">
+                <MathText text={sub.definition} />
+              </div>
+            </div>
+          )}
+
+          {/* 2. Plain Pedagogical Explanation */}
+          {sub.explanation && (
+            <div className="subtopic-box subtopic-exp-box">
+              <div className="subtopic-box-label">📝 CORE CONCEPT EXPLANATION</div>
+              <FormattedContent content={sub.explanation} />
+            </div>
+          )}
+
+          {/* 3. Formulas & Equations (with KaTeX) */}
+          {sub.formulas && sub.formulas.length > 0 && (
+            <div className="subtopic-box subtopic-formula-box">
+              <div className="subtopic-box-label">🧮 FORMULAS & PARAMETERS</div>
+              <div className="subtopic-formulas-grid">
+                {sub.formulas.map((formStr, fIdx) => (
+                  <div key={fIdx} className="subtopic-formula-pill">
+                    <MathText text={formStr} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 4. Worked Example */}
+          {exampleObj && (exampleObj.problem || exampleObj.solution) && (
+            <div className="subtopic-box subtopic-example-box">
+              <div className="subtopic-box-label">💡 WORKED EXAMPLE</div>
+              {exampleObj.problem && (
+                <div className="example-problem">
+                  <strong>Problem:</strong> <MathText text={exampleObj.problem} />
+                </div>
+              )}
+              {exampleObj.solution && (
+                <div className="example-solution">
+                  <strong>Step-by-Step Solution:</strong> <MathText text={exampleObj.solution} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 5. Comparison Table */}
+          {sub.comparison_table && sub.comparison_table.includes('|') && (
+            <div className="subtopic-box subtopic-table-box">
+              <div className="subtopic-box-label">📊 KEY DISTINCTIONS & COMPARISONS</div>
+              <FormattedContent content={sub.comparison_table} />
+            </div>
+          )}
+
+          {/* 6. Common Mistakes & Exam Tips */}
+          {((sub.common_mistakes && sub.common_mistakes.length > 0) || (sub.exam_tips && sub.exam_tips.length > 0)) && (
+            <div className="subtopic-traps-row">
+              {sub.common_mistakes && sub.common_mistakes.length > 0 && (
+                <div className="trap-card trap-mistake">
+                  <div className="trap-title">⚠️ COMMON MISTAKES & TRAPS</div>
+                  <ul className="trap-list">
+                    {sub.common_mistakes.map((m, mIdx) => (
+                      <li key={mIdx}><MathText text={m} /></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {sub.exam_tips && sub.exam_tips.length > 0 && (
+                <div className="trap-card trap-tip">
+                  <div className="trap-title">🎯 HIGH-YIELD EXAM TIPS</div>
+                  <ul className="trap-list">
+                    {sub.exam_tips.map((t, tIdx) => (
+                      <li key={tIdx}><MathText text={t} /></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 7. Attached Figures & Diagrams (if any) */}
+          {sub.figures && sub.figures.length > 0 && (
+            <div className="subtopic-box subtopic-figures-box">
+              <div className="subtopic-box-label">🎨 ATTACHED DIAGRAMS</div>
+              {sub.figures.map((fig, figIdx) => (
+                <div key={figIdx} className="figure-item">
+                  {fig.image_url && <img src={fig.image_url} alt={fig.caption || 'Textbook Diagram'} className="subtopic-diagram-img" />}
+                  <span className="figure-caption">{fig.caption || `Figure on Page ${fig.page || ''}`}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOPIC QUICK CARD — 1-Screen Rapid Revision Sheet per Topic
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TopicQuickCard({ topic, index, accent }) {
+  return (
+    <section
+      className="quick-topic-card anime-section"
+      id={`quick-${index}`}
+      style={{
+        '--anime-border': accent.border,
+        '--anime-bg': accent.bg,
+        '--anime-glow': accent.glow,
+      }}
+    >
+      <div className="quick-topic-head">
+        <div className="quick-topic-badge" style={{ background: accent.border }}>
+          {accent.emoji} {String(index + 1).padStart(2, '0')}
+        </div>
+        <div className="quick-topic-titles">
+          <span className="quick-topic-chapter">{topic.chapter}</span>
+          <h3 className="quick-topic-name">{topic.topic}</h3>
+        </div>
+        {topic.source_pages?.length > 0 && (
+          <span className="quick-page-pill">📖 Pages {topic.source_pages.join(', ')}</span>
+        )}
+      </div>
+
+      {/* 5 to 8 crisp summary bullets */}
+      {topic.bullets && topic.bullets.length > 0 && (
+        <div className="quick-bullets-wrap">
+          <ul className="quick-bullets-list">
+            {topic.bullets.map((b, bIdx) => (
+              <li key={bIdx}><MathText text={b} /></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Key Formulas */}
+      {topic.key_formulas && topic.key_formulas.length > 0 && (
+        <div className="quick-formulas-wrap">
+          <div className="quick-subhead">⚡ ESSENTIAL FORMULAS</div>
+          <div className="quick-formula-items">
+            {topic.key_formulas.map((f, fIdx) => (
+              <div key={fIdx} className="quick-formula-pill">
+                <MathText text={f} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 1-Line Memory Trick / Mnemonic */}
+      {topic.memory_trick && (
+        <div className="quick-mnemonic-wrap">
+          <div className="mnemonic-tag">🧠 MEMORY TRICK (MNEMONIC)</div>
+          <div className="mnemonic-text"><MathText text={topic.memory_trick} /></div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTES PANEL — Table of Contents, KaTeX Math, & Collapsible Concepts
+// ═══════════════════════════════════════════════════════════════════════════
+
+function NotesPanel({ material, view, onCopy, onGenerate, actionLabel }) {
   const [copied, setCopied] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [expandedMap, setExpandedMap] = useState({})
+  const [allExpanded, setAllExpanded] = useState(true)
+
+  const isQuick = view === 'quick-notes'
+  const subtopics = material?.subtopics || []
+  const topics = material?.topics || []
+  const sections = material?.sections || []
+
+  // Initialize or toggle expanded state
+  const isSubtopicMode = !isQuick && subtopics.length > 0
+  const isTopicQuickMode = isQuick && topics.length > 0
+
+  useEffect(() => {
+    // Default: expand all on load
+    if (subtopics.length > 0) {
+      const initMap = {}
+      subtopics.forEach((_, i) => { initMap[i] = true })
+      setExpandedMap(initMap)
+      setAllExpanded(true)
+    }
+  }, [subtopics.length])
 
   if (!material) {
     return (
       <EmptyMaterial
         icon={Sparkles}
         title="Your notes are one tap away"
-        detail="Lumio will structure your textbook into clear, sourced study sections with key formulas and concepts."
+        detail="Lumio will structure your textbook into clear, sourced study sections with key formulas, worked examples, and concept breakdown."
         onGenerate={onGenerate}
         actionLabel={actionLabel}
       />
@@ -591,91 +889,259 @@ function NotesPanel({ material, onCopy, onGenerate, actionLabel }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  /** Accent color palette for anime-style section borders */
+  const toggleAll = () => {
+    const nextState = !allExpanded
+    setAllExpanded(nextState)
+    const newMap = {}
+    subtopics.forEach((_, i) => { newMap[i] = nextState })
+    setExpandedMap(newMap)
+  }
+
+  const toggleSubtopic = (index) => {
+    setExpandedMap((prev) => ({ ...prev, [index]: !prev[index] }))
+  }
+
+  /** Accent color palette */
   const accentColors = [
-    { border: '#FF6B9D', bg: 'rgba(255,107,157,0.06)', glow: 'rgba(255,107,157,0.2)', emoji: '🌸' },
-    { border: '#00D2FF', bg: 'rgba(0,210,255,0.06)', glow: 'rgba(0,210,255,0.2)', emoji: '✨' },
-    { border: '#FFB347', bg: 'rgba(255,179,71,0.06)', glow: 'rgba(255,179,71,0.2)', emoji: '🔥' },
-    { border: '#7B68EE', bg: 'rgba(123,104,238,0.06)', glow: 'rgba(123,104,238,0.2)', emoji: '💜' },
-    { border: '#50C878', bg: 'rgba(80,200,120,0.06)', glow: 'rgba(80,200,120,0.2)', emoji: '🍀' },
-    { border: '#FF69B4', bg: 'rgba(255,105,180,0.06)', glow: 'rgba(255,105,180,0.2)', emoji: '🎀' },
+    { border: '#e85d2a', bg: 'rgba(232,93,42,0.05)', glow: 'rgba(232,93,42,0.18)', emoji: '🔥' },
+    { border: '#347e72', bg: 'rgba(52,126,114,0.05)', glow: 'rgba(52,126,114,0.18)', emoji: '✨' },
+    { border: '#dfb744', bg: 'rgba(223,183,68,0.06)', glow: 'rgba(223,183,68,0.18)', emoji: '⭐' },
+    { border: '#7B68EE', bg: 'rgba(123,104,238,0.06)', glow: 'rgba(123,104,238,0.18)', emoji: '💜' },
+    { border: '#c84535', bg: 'rgba(200,69,53,0.05)', glow: 'rgba(200,69,53,0.18)', emoji: '🌟' },
+    { border: '#00A896', bg: 'rgba(0,168,150,0.06)', glow: 'rgba(0,168,150,0.18)', emoji: '🍀' },
   ]
 
-  const sections = material.sections || []
+  // Filter items in Table of Contents based on search term
+  const filteredSubtopics = useMemo(() => {
+    if (!searchTerm.trim()) return subtopics
+    const q = searchTerm.toLowerCase()
+    return subtopics.filter((s) =>
+      s.subtopic.toLowerCase().includes(q) ||
+      s.chapter.toLowerCase().includes(q) ||
+      (s.topic && s.topic.toLowerCase().includes(q))
+    )
+  }, [subtopics, searchTerm])
+
+  const filteredTopics = useMemo(() => {
+    if (!searchTerm.trim()) return topics
+    const q = searchTerm.toLowerCase()
+    return topics.filter((t) =>
+      t.topic.toLowerCase().includes(q) ||
+      t.chapter.toLowerCase().includes(q)
+    )
+  }, [topics, searchTerm])
 
   return (
     <div className="notes-layout">
-      {/* Side index navigation with smooth scroll */}
-      <aside className="notes-index">
-        <span>IN THIS GUIDE</span>
-        {sections.map((section, index) => (
-          <a
-            key={`${section.heading}-${index}`}
-            href={`#note-${index}`}
-            onClick={(e) => {
-              e.preventDefault()
-              document.getElementById(`note-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }}
-          >
-            {String(index + 1).padStart(2, '0')} <b>{section.heading}</b>
-          </a>
-        ))}
+      {/* Sidebar Table of Contents (TOC) */}
+      <aside className="notes-index-sidebar">
+        <div className="toc-header">
+          <span className="toc-title">TABLE OF CONTENTS</span>
+          <span className="toc-count">
+            {isSubtopicMode ? `${subtopics.length} SUBTOPICS` :
+             isTopicQuickMode ? `${topics.length} TOPICS` :
+             `${sections.length} SECTIONS`}
+          </span>
+        </div>
+
+        {/* Search filter in Table of Contents */}
+        {(isSubtopicMode || isTopicQuickMode) && (
+          <div className="toc-search-wrap">
+            <Search size={14} className="toc-search-icon" />
+            <input
+              type="text"
+              placeholder={isSubtopicMode ? "Search 46 subtopics..." : "Search topics..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="toc-search-input"
+            />
+            {searchTerm && (
+              <button className="toc-clear-btn" onClick={() => setSearchTerm('')}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Subtopic links tree */}
+        <div className="toc-items-scroll">
+          {isSubtopicMode && (
+            filteredSubtopics.map((sub, idx) => {
+              const origIdx = subtopics.indexOf(sub)
+              return (
+                <a
+                  key={sub.subtopic_id || origIdx}
+                  href={`#subtopic-${origIdx}`}
+                  className="toc-subtopic-link"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setExpandedMap((prev) => ({ ...prev, [origIdx]: true }))
+                    document.getElementById(`subtopic-${origIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  <span className="toc-item-number">{String(origIdx + 1).padStart(2, '0')}</span>
+                  <div className="toc-item-text">
+                    <small className="toc-chapter-breadcrumb">{sub.chapter.replace(/^Chapter\s+\d+:\s*/i, '')}</small>
+                    <b className="toc-subtopic-heading">{sub.subtopic}</b>
+                  </div>
+                  {sub.source_pages?.length > 0 && (
+                    <span className="toc-page-pill">p.{sub.source_pages[0]}</span>
+                  )}
+                </a>
+              )
+            })
+          )}
+
+          {isTopicQuickMode && (
+            filteredTopics.map((top, idx) => {
+              const origIdx = topics.indexOf(top)
+              return (
+                <a
+                  key={top.topic_id || origIdx}
+                  href={`#quick-${origIdx}`}
+                  className="toc-subtopic-link"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    document.getElementById(`quick-${origIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  <span className="toc-item-number">{String(origIdx + 1).padStart(2, '0')}</span>
+                  <div className="toc-item-text">
+                    <small className="toc-chapter-breadcrumb">{top.chapter.replace(/^Chapter\s+\d+:\s*/i, '')}</small>
+                    <b className="toc-subtopic-heading">{top.topic}</b>
+                  </div>
+                  {top.source_pages?.length > 0 && (
+                    <span className="toc-page-pill">p.{top.source_pages[0]}</span>
+                  )}
+                </a>
+              )
+            })
+          )}
+
+          {/* Fallback sections list if subtopics array is empty */}
+          {!isSubtopicMode && !isTopicQuickMode && (
+            sections.map((section, index) => (
+              <a
+                key={`${section.heading}-${index}`}
+                href={`#note-${index}`}
+                className="toc-subtopic-link"
+                onClick={(e) => {
+                  e.preventDefault()
+                  document.getElementById(`note-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+              >
+                <span className="toc-item-number">{String(index + 1).padStart(2, '0')}</span>
+                <b className="toc-subtopic-heading">{section.heading}</b>
+              </a>
+            ))
+          )}
+        </div>
+
         <button className="text-action copy-action-btn" onClick={handleCopy}>
           {copied ? <><Check size={15} color="#3d7a51" /> Copied to clipboard!</> : <><FileText size={15} /> Copy notes</>}
         </button>
       </aside>
 
-      {/* Anime-bordered notes paper */}
+      {/* Main notes paper */}
       <article className="notes-paper anime-notes">
-        {/* Decorative anime corner elements */}
+        {/* Decorative corner elements */}
         <div className="anime-corner anime-corner-tl">✦</div>
         <div className="anime-corner anime-corner-tr">❀</div>
         <div className="anime-corner anime-corner-bl">✿</div>
         <div className="anime-corner anime-corner-br">✦</div>
         <div className="anime-sparkle-strip" />
 
-        {/* Header */}
+        {/* Header toolbar */}
         <div className="paper-topline anime-topline">
-          <span><Sparkles size={14} /> ✨ LUMIO STUDY GUIDE ✨</span>
-          <span>🌟 {sections.length} SECTIONS</span>
+          <span><Sparkles size={14} /> ✨ {isQuick ? 'LUMIO RAPID REVISION' : 'LUMIO MASTER STUDY GUIDE'} ✨</span>
+          <div className="topline-actions">
+            {isSubtopicMode && (
+              <button className="expand-all-btn" onClick={toggleAll}>
+                {allExpanded ? <><ChevronUp size={14} /> Collapse all</> : <><ChevronDown size={14} /> Expand all</>}
+              </button>
+            )}
+            <span className="topline-pill">
+              🌟 {isSubtopicMode ? `${subtopics.length} SUBTOPICS` :
+                  isTopicQuickMode ? `${topics.length} TOPICS` :
+                  `${sections.length} SECTIONS`}
+            </span>
+          </div>
         </div>
+
         <h2 className="anime-title">{material.title}</h2>
 
-        {/* Note sections with colorful anime borders */}
-        {sections.map((section, index) => {
-          const accent = accentColors[index % accentColors.length]
-          return (
-            <section
-              className="note-section anime-section"
-              id={`note-${index}`}
-              key={`${section.heading}-${index}`}
-              style={{
-                '--anime-border': accent.border,
-                '--anime-bg': accent.bg,
-                '--anime-glow': accent.glow,
-              }}
-            >
-              <div className="anime-badge" style={{ background: accent.border }}>
-                {accent.emoji}
-              </div>
+        {/* View 1: Granular Deep Notes (Subtopics) */}
+        {isSubtopicMode && (
+          <div className="subtopics-container">
+            {subtopics.map((sub, index) => {
+              const accent = accentColors[index % accentColors.length]
+              return (
+                <SubtopicCard
+                  key={sub.subtopic_id || index}
+                  sub={sub}
+                  index={index}
+                  expanded={expandedMap[index] ?? true}
+                  onToggle={() => toggleSubtopic(index)}
+                  accent={accent}
+                />
+              )
+            })}
+          </div>
+        )}
 
-              <div className="note-section-head">
-                <span className="note-number anime-number" style={{ color: accent.border }}>
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <h3 style={{ color: accent.border }}>{section.heading}</h3>
-              </div>
-              <FormattedContent content={section.content} />
-              {section.source_pages?.length > 0 && (
-                <div className="source-line anime-source" style={{ color: accent.border }}>
-                  📖 SOURCE PAGES <span>{section.source_pages.join(' · ')}</span>
+        {/* View 2: Quick Notes (Topic Revision Sheets) */}
+        {isTopicQuickMode && (
+          <div className="quick-topics-container">
+            {topics.map((top, index) => {
+              const accent = accentColors[index % accentColors.length]
+              return (
+                <TopicQuickCard
+                  key={top.topic_id || index}
+                  topic={top}
+                  index={index}
+                  accent={accent}
+                />
+              )
+            })}
+          </div>
+        )}
+
+        {/* View 3: Fallback Sections */}
+        {!isSubtopicMode && !isTopicQuickMode && (
+          sections.map((section, index) => {
+            const accent = accentColors[index % accentColors.length]
+            return (
+              <section
+                className="note-section anime-section"
+                id={`note-${index}`}
+                key={`${section.heading}-${index}`}
+                style={{
+                  '--anime-border': accent.border,
+                  '--anime-bg': accent.bg,
+                  '--anime-glow': accent.glow,
+                }}
+              >
+                <div className="anime-badge" style={{ background: accent.border }}>
+                  {accent.emoji}
                 </div>
-              )}
-            </section>
-          )
-        })}
+                <div className="note-section-head">
+                  <span className="note-number anime-number" style={{ color: accent.border }}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <h3 style={{ color: accent.border }}>{section.heading}</h3>
+                </div>
+                <FormattedContent content={section.content} />
+                {section.source_pages?.length > 0 && (
+                  <div className="source-line anime-source" style={{ color: accent.border }}>
+                    📖 SOURCE PAGES <span>{section.source_pages.join(' · ')}</span>
+                  </div>
+                )}
+              </section>
+            )
+          })
+        )}
 
-        {/* Bottom anime decoration */}
+        {/* Bottom footer decoration */}
         <div className="anime-footer">
           <span>🌈</span>
           <span>Made with ✨ by Lumio</span>

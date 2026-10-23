@@ -37,10 +37,15 @@ except ImportError:
     except ImportError:
         fitz = None
 
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError
+try:
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+except ImportError:
+    PdfReader = None
+    PdfReadError = Exception
 
 from app.config import MAX_PDF_PAGES
+from app.text_preprocessor import check_page_quality
 
 logger = logging.getLogger("lumio.pdf_extractor")
 
@@ -108,95 +113,101 @@ def _table_to_markdown(rows: list[list[str | None]]) -> str:
 def _extract_with_pymupdf(pdf_path: str) -> list[dict]:
     """Extract text, tables, diagrams, and drawings using PyMuPDF."""
     doc = fitz.open(pdf_path)
+    try:
+        if doc.is_encrypted:
+            raise PDFEncryptedError("PDF is encrypted or password-protected. Please upload an unprotected file.")
 
-    if doc.is_encrypted:
-        raise PDFEncryptedError("PDF is encrypted or password-protected. Please upload an unprotected file.")
+        total_pages = len(doc)
+        if total_pages > MAX_PDF_PAGES:
+            raise PDFPageLimitError(
+                f"PDF has {total_pages} pages, which exceeds the limit of {MAX_PDF_PAGES} pages."
+            )
 
-    total_pages = len(doc)
-    if total_pages > MAX_PDF_PAGES:
-        raise PDFPageLimitError(
-            f"PDF has {total_pages} pages, which exceeds the limit of {MAX_PDF_PAGES} pages."
-        )
+        pages = []
+        scanned_candidate_pages = []
 
-    pages = []
-    scanned_candidate_pages = []
+        for page_idx in range(total_pages):
+            page = doc[page_idx]
+            page_no = page_idx + 1
 
-    for page_idx in range(total_pages):
-        page = doc[page_idx]
-        page_no = page_idx + 1
+            raw_text = page.get_text("text") or ""
+            images = page.get_images()
+            drawings = page.get_drawings()
 
-        raw_text = page.get_text("text") or ""
-        images = page.get_images()
-        drawings = page.get_drawings()
+            # Check for figure/diagram captions
+            figure_captions = []
+            for line in raw_text.splitlines():
+                line_str = line.strip()
+                if re.match(r"^(?:Figure|Fig\.|Diagram|Scheme|Illustration|Chart|Plot)\s*[\d\.\-:]*\s*", line_str, re.IGNORECASE):
+                    if len(line_str) > 3:
+                        figure_captions.append(line_str)
 
-        # Check for figure/diagram captions
-        figure_captions = []
-        for line in raw_text.splitlines():
-            line_str = line.strip()
-            if re.match(r"^(?:Figure|Fig\.|Diagram|Scheme|Illustration|Chart|Plot)\s*[\d\.\-:]*\s*", line_str, re.IGNORECASE):
-                if len(line_str) > 3:
-                    figure_captions.append(line_str)
+            # Detect and extract structured tables
+            table_markdown_blocks = []
+            try:
+                tabs = page.find_tables()
+                if tabs and tabs.tables:
+                    for t in tabs.tables:
+                        md = _table_to_markdown(t.extract())
+                        if md:
+                            table_markdown_blocks.append(md)
+            except Exception as e:
+                logger.debug("Table detection skipped on page %d: %s", page_no, e)
 
-        # Detect and extract structured tables
-        table_markdown_blocks = []
-        try:
-            tabs = page.find_tables()
-            if tabs and tabs.tables:
-                for t in tabs.tables:
-                    md = _table_to_markdown(t.extract())
-                    if md:
-                        table_markdown_blocks.append(md)
-        except Exception as e:
-            logger.debug("Table detection skipped on page %d: %s", page_no, e)
+            # Build page text content
+            content_parts = []
 
-        # Build page text content
-        content_parts = []
+            # If page has diagrams, drawings, or images, add explicit visual context markers
+            if figure_captions:
+                for cap in figure_captions:
+                    content_parts.append(f"\n[FIGURE / DIAGRAM: {cap}]\n")
+            elif images or drawings:
+                visual_desc = []
+                if len(images) > 0:
+                    visual_desc.append(f"{len(images)} illustration(s)/diagram image(s)")
+                if len(drawings) >= 4:
+                    visual_desc.append(f"{len(drawings)} technical/chemical/vector drawing path(s)")
+                if visual_desc:
+                    content_parts.append(f"\n[VISUAL ELEMENTS DETECTED (Page {page_no}): {', '.join(visual_desc)}]\n")
 
-        # If page has diagrams, drawings, or images, add explicit visual context markers
-        if figure_captions:
-            for cap in figure_captions:
-                content_parts.append(f"\n[FIGURE / DIAGRAM: {cap}]\n")
-        elif images or drawings:
-            # If visual drawings exist without an explicit caption line
-            visual_desc = []
-            if len(images) > 0:
-                visual_desc.append(f"{len(images)} illustration(s)/diagram image(s)")
-            if len(drawings) >= 4:
-                visual_desc.append(f"{len(drawings)} technical/chemical/vector drawing path(s)")
-            if visual_desc:
-                content_parts.append(f"\n[VISUAL ELEMENTS DETECTED (Page {page_no}): {', '.join(visual_desc)}]\n")
+            content_parts.append(raw_text)
 
-        content_parts.append(raw_text)
+            if table_markdown_blocks:
+                content_parts.append("\n[STRUCTURED TABLES (Page " + str(page_no) + ")]:\n")
+                content_parts.extend(table_markdown_blocks)
 
-        if table_markdown_blocks:
-            content_parts.append("\n[STRUCTURED TABLES (Page " + str(page_no) + ")]:\n")
-            content_parts.extend(table_markdown_blocks)
+            full_page_text = "\n".join(content_parts).strip()
 
-        full_page_text = "\n".join(content_parts).strip()
+            # Evaluate extracted page quality
+            quality = check_page_quality(raw_text)
 
-        # Track scanned pages (has images/drawings but less than 15 characters of real text)
-        clean_len = len(re.sub(r"\s+", "", raw_text))
-        if clean_len < 15 and (len(images) > 0 or len(drawings) > 0):
-            scanned_candidate_pages.append(page_no)
+            # Track scanned or low-quality candidate pages
+            if not quality["is_valid"]:
+                scanned_candidate_pages.append(page_no)
 
-        pages.append({
-            "page": page_no,
-            "text": full_page_text,
-            "has_diagram": bool(figure_captions or images or len(drawings) >= 4),
-            "image_count": len(images),
-            "drawing_count": len(drawings),
-        })
+            pages.append({
+                "page": page_no,
+                "text": full_page_text,
+                "raw_text": raw_text,
+                "has_diagram": bool(figure_captions or images or len(drawings) >= 4),
+                "image_count": len(images),
+                "drawing_count": len(drawings),
+                "quality": quality,
+                "captions": figure_captions,
+            })
 
-    # Validate overall extraction quality against raw extracted text
-    total_raw_text_chars = sum(len(doc[i].get_text("text").strip()) for i in range(total_pages))
-    if total_raw_text_chars < 50 and scanned_candidate_pages:
-        pages_str = ", ".join(map(str, scanned_candidate_pages[:10]))
-        raise PDFScannedError(
-            f"This PDF appears to contain scanned pages or photos without selectable digital text (pages: {pages_str}). "
-            "Please upload a document with digital text or run OCR before uploading."
-        )
+        # Validate overall extraction quality against raw extracted text
+        total_raw_text_chars = sum(len(doc[i].get_text("text").strip()) for i in range(total_pages))
+        if total_raw_text_chars < 50 and scanned_candidate_pages:
+            pages_str = ", ".join(map(str, scanned_candidate_pages[:10]))
+            raise PDFScannedError(
+                f"This PDF appears to contain scanned pages or photos without selectable digital text (pages: {pages_str}). "
+                "Please upload a document with digital text or run OCR before uploading."
+            )
 
-    return pages
+        return pages
+    finally:
+        doc.close()
 
 
 # ---------------------------------------------------------------------------

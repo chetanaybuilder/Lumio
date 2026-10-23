@@ -141,3 +141,78 @@ def detect_structure(pages: list) -> list:
                 })
 
     return sections
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical Outline (Chapter > Topic > Subtopic)
+# ---------------------------------------------------------------------------
+
+def build_hierarchical_outline(sections: list[dict]) -> list[dict]:
+    """
+    Construct a structured 3-level academic outline (Chapter > Topic > Subtopic)
+    from detected flat sections.
+
+    Returns
+    -------
+    list[dict]
+        List of subtopic items, each with:
+        - ``id``: unique identifier (e.g. "subtopic_1_1")
+        - ``chapter``: parent chapter name
+        - ``topic``: parent topic name
+        - ``subtopic``: specific subtopic title
+        - ``source_pages``: list of page numbers
+        - ``content``: full excerpt text for this subtopic
+    """
+    current_chapter = "General Overview"
+    current_topic = "Foundational Concepts"
+    subtopics = []
+    subtopic_idx = 0
+
+    for sec in sections:
+        heading = sec.get("heading", "").strip()
+        start_page = sec.get("start_page", 1)
+        content_items = sec.get("content", [])
+        page_set = set()
+        if start_page:
+            page_set.add(start_page)
+        for item in content_items:
+            if "page" in item:
+                page_set.add(item["page"])
+        source_pages = sorted(list(page_set))
+
+        # Full text content for this section
+        text_lines = [item.get("text", "") for item in content_items if item.get("text")]
+        full_text = "\n".join(text_lines).strip()
+
+        # Check if heading is a Chapter
+        ch_match = re.match(r"^(?:Chapter|Unit|Module|PART)\s+[\dIVXLCDM]+[:\s\-]*(.*)$", heading, re.IGNORECASE)
+        if ch_match:
+            current_chapter = heading
+            current_topic = ch_match.group(1).strip() or heading
+            if not full_text:
+                continue
+
+        # Check if heading is a Topic (e.g. "1.1 Discovery of...", "2.4 VSEPR...")
+        topic_match = re.match(r"^(\d+\.\d+)\s+[:\s\-]*(.*)$", heading)
+        if topic_match:
+            current_topic = heading
+
+        subtopic_idx += 1
+        subtopic_id = f"subtopic_{subtopic_idx}"
+        subtopic_title = heading
+        if heading.startswith("[STRUCTURED TABLES"):
+            subtopic_title = f"{current_topic} - Structured Data & Tables"
+        elif heading.startswith("[FIGURE / DIAGRAM:"):
+            cap = heading.replace("[FIGURE / DIAGRAM:", "").replace("]", "").strip()
+            subtopic_title = f"{current_topic} - Diagram: {cap[:60]}"
+
+        subtopics.append({
+            "id": subtopic_id,
+            "chapter": current_chapter,
+            "topic": current_topic,
+            "subtopic": subtopic_title,
+            "source_pages": source_pages if source_pages else [1],
+            "content": full_text,
+        })
+
+    return subtopics

@@ -29,6 +29,7 @@ session cannot access another session's data.
 """
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager, suppress
 from tempfile import NamedTemporaryFile
@@ -55,12 +56,17 @@ from app.prompt_templates import chat_prompt, study_prompt
 from app.schemas import (
     ChatOutput,
     ChatRequest,
+    DeepNotesOutput,
     DocumentRequest,
     ExportRequest,
     FlashcardsOutput,
+    NoteSection,
     NotesOutput,
+    QuickNotesOutput,
     QuizOutput,
     QuizRequest,
+    SubtopicNote,
+    TopicQuickNote,
 )
 from app.session_manager import (
     StudySession,
@@ -69,7 +75,7 @@ from app.session_manager import (
     get_session,
     remove_session,
 )
-from app.structure_detector import detect_structure
+from app.structure_detector import build_hierarchical_outline, detect_structure
 from app.text_preprocessor import clean_pages
 from app.vector_store import clear_all_chunks, delete_document, query_chunks, store_chunks
 
@@ -463,11 +469,14 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
     """
     Shared handler for deep-notes and quick-notes generation.
 
-    Assembles a document context, prompts Gemini for structured notes,
-    validates source-page claims, and caches the result on the session.
+    Assembles a document context, prompts LLM for structured notes,
+    validates source-page claims, enriches with outline subtopics/topics,
+    and caches the result on the session.
     """
     document = owned_document(session, request.document_id)
     context, pages = document_context(document)
+    sections = document.get("sections", [])
+    outline = build_hierarchical_outline(sections)
     try:
         async with generation_slots:
             result = await run_in_threadpool(
@@ -476,6 +485,52 @@ async def generate_notes(request: DocumentRequest, session: StudySession, kind: 
                 NotesOutput,
             )
         material = valid_pages(result.model_dump(), pages)
+
+        # If subtopics exist in outline and kind is deep-notes, ensure all subtopics are populated
+        if kind == "deep-notes" and outline:
+            if not material.get("subtopics"):
+                subtopics_list = []
+                for s in outline:
+                    subtopics_list.append({
+                        "subtopic_id": s["id"],
+                        "chapter": s["chapter"],
+                        "topic": s["topic"],
+                        "subtopic": s["subtopic"],
+                        "source_pages": [p for p in s.get("source_pages", [1]) if p in pages] or [1],
+                        "definition": f"Core principles and definitions for {s['subtopic']}.",
+                        "explanation": s.get("content", ""),
+                        "formulas": [],
+                        "worked_example": "",
+                        "comparison_table": "",
+                        "common_mistakes": [],
+                        "exam_tips": [],
+                        "figures": [],
+                    })
+                material["subtopics"] = subtopics_list
+
+        # If topics exist in outline and kind is quick-notes, ensure topics are populated
+        if kind == "quick-notes" and outline:
+            if not material.get("topics"):
+                from collections import defaultdict
+                by_topic = defaultdict(list)
+                for s in outline:
+                    by_topic[(s["chapter"], s["topic"])].append(s)
+                topics_list = []
+                for idx, ((ch, top), subs) in enumerate(by_topic.items(), start=1):
+                    t_pages = set()
+                    for sub in subs:
+                        t_pages.update(sub.get("source_pages", [1]))
+                    topics_list.append({
+                        "topic_id": f"topic_{idx}",
+                        "chapter": ch,
+                        "topic": top,
+                        "source_pages": sorted([p for p in t_pages if p in pages]) or [1],
+                        "bullets": [s["subtopic"] for s in subs][:8],
+                        "key_formulas": [],
+                        "memory_trick": "",
+                    })
+                material["topics"] = topics_list
+
         document["materials"][kind] = material
         return material
     except Exception as error:

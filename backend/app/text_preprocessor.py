@@ -47,61 +47,104 @@ def _normalize_symbols(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-def normalize_font_artifacts(text: str) -> str:
-    """Detect and repair font glyph shifts, Caesar shifts, and kerning noise."""
+# ---------------------------------------------------------------------------
+# Scientific symbol, subscript, and Greek letter normalization
+# ---------------------------------------------------------------------------
+
+_GREEK_AND_MATH_MAP = {
+    # Greek letters
+    "\u03b1": "alpha", "\u03b2": "beta", "\u03b3": "gamma", "\u03b4": "delta",
+    "\u0394": "Delta", "\u03b5": "epsilon", "\u03b8": "theta", "\u03bb": "lambda",
+    "\u03bc": "mu", "\u03bd": "nu", "\u03c0": "pi", "\u03c1": "rho",
+    "\u03c3": "sigma", "\u03c4": "tau", "\u03c6": "phi", "\u03c8": "psi", "\u03c9": "omega",
+    # Arrows and relations
+    "\u2192": " -> ", "\u21cc": " <=> ", "\u2194": " <-> ", "\u21d2": " => ",
+    "\u2264": " <= ", "\u2265": " >= ", "\u2260": " != ", "\u2248": " ~= ",
+    "\u00b1": " +/- ", "\u00d7": " x ", "\u2212": "-",
+    # Common superscripts & subscripts
+    "\u2070": "^0", "\u00b9": "^1", "\u00b2": "^2", "\u00b3": "^3",
+    "\u2074": "^4", "\u2075": "^5", "\u2076": "^6", "\u2077": "^7", "\u2078": "^8", "\u2079": "^9",
+    "\u207a": "^+", "\u207b": "^-",
+    "\u2080": "_0", "\u2081": "_1", "\u2082": "_2", "\u2083": "_3",
+    "\u2084": "_4", "\u2085": "_5", "\u2086": "_6", "\u2087": "_7", "\u2088": "_8", "\u2089": "_9",
+}
+
+# Core dictionary of common English words + STEM academic terminology for quality verification
+_COMMON_VOCAB = {
+    "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", "for", "on", "are",
+    "as", "with", "his", "they", "i", "at", "be", "this", "have", "from", "or", "one", "had", "by",
+    "word", "but", "not", "what", "all", "were", "we", "when", "your", "can", "said", "there", "use",
+    "an", "each", "which", "she", "do", "how", "their", "if", "will", "up", "other", "about", "out",
+    "many", "then", "them", "these", "so", "some", "her", "would", "make", "like", "him", "into",
+    "time", "has", "look", "two", "more", "write", "go", "see", "number", "no", "way", "could",
+    "people", "my", "than", "first", "water", "been", "call", "who", "oil", "its", "now", "find",
+    "atom", "atomic", "electron", "proton", "neutron", "nucleus", "orbit", "orbital", "energy",
+    "level", "quantum", "number", "mass", "charge", "ratio", "experiment", "model", "structure",
+    "bond", "bonding", "chemical", "covalent", "ionic", "molecule", "molecular", "compound",
+    "reaction", "equilibrium", "thermodynamics", "enthalpy", "entropy", "free", "gibbs",
+    "state", "gas", "liquid", "solid", "pressure", "volume", "temperature", "equation",
+    "acid", "base", "solution", "concentration", "molar", "solubility", "buffer", "redox",
+    "oxidation", "reduction", "electrode", "potential", "cell", "current", "hybrid", "hybridization",
+    "resonance", "organic", "carbon", "isomer", "nomenclature", "formula", "law", "constant",
+    "table", "figure", "diagram", "process", "rule", "theory", "discovery", "particles",
+    "principal", "momentum", "magnetic", "spin", "geometry", "shape", "linear", "trigonal",
+    "tetrahedral", "octahedral", "pyramidal", "bent", "dipole", "polar", "nonpolar",
+    "boiling", "melting", "point", "vapour", "colligative", "osmotic", "factor", "catalyst",
+    "rate", "half", "life", "first", "second", "zero", "order", "activation", "mechanism",
+    "chapter", "section", "topic", "summary", "exercise", "example", "problem", "solution",
+}
+
+
+def check_page_quality(text: str) -> dict:
+    """
+    Evaluate the quality of extracted text on a page.
+    Detects whether a page has authentic text or requires OCR / vision fallback.
+
+    Returns
+    -------
+    dict
+        - ``is_valid`` (bool): True if quality meets standards.
+        - ``dictionary_ratio`` (float): Share of recognized words.
+        - ``weird_symbol_ratio`` (float): Ratio of abnormal characters.
+        - ``char_count`` (int): Length of non-whitespace text.
+    """
     if not text:
-        return ""
-    working = text
+        return {"is_valid": False, "dictionary_ratio": 0.0, "weird_symbol_ratio": 1.0, "char_count": 0, "reason": "empty"}
 
-    # Caesar -1 / +1 shifts (e.g. TDIJTUPTPNB -> Schistosoma, QBSTJF -> parasite)
-    if re.search(r"T\s*D\s*I\s*J\s*T\s*U\s*P\s*T\s*P\s*N\s*B", working, re.IGNORECASE):
-        working = re.sub(r"T\s*D\s*I\s*J\s*T\s*U\s*P\s*T\s*P\s*N\s*B", "Schistosoma", working, flags=re.IGNORECASE)
-        working = re.sub(r"Q\s*B\s*S\s*B\s*T\s*J\s*U\s*F", "parasite", working, flags=re.IGNORECASE)
+    raw_clean = re.sub(r"\s+", "", text)
+    char_count = len(raw_clean)
+    if char_count < 30:
+        return {"is_valid": False, "dictionary_ratio": 0.0, "weird_symbol_ratio": 0.0, "char_count": char_count, "reason": "too_short"}
 
-    # ROT-3
-    if re.search(r"U\s*H\s*V\s*H\s*Q\s*W\s*H\s*G", working, re.IGNORECASE):
-        working = re.sub(r"3?\s*U\s*H\s*V\s*H\s*Q\s*W\s*H\s*G", "Presented", working, flags=re.IGNORECASE)
-        working = re.sub(r"E\s*\\\s*0\s*D\s*K\s*L\s*\*?\s*U\s*R\s*X\s*S", "by Mahi Group", working, flags=re.IGNORECASE)
+    # Extract all alphabetical words of length 2+
+    words = [w.lower() for w in re.findall(r"[A-Za-z]{2,}", text)]
+    if not words:
+        return {"is_valid": False, "dictionary_ratio": 0.0, "weird_symbol_ratio": 1.0, "char_count": char_count, "reason": "no_words"}
 
-    # Strip repetitive orphan noise (e.g. 't t t t')
-    working = re.sub(r"(?:[tQVeZ'#`]\s*){3,}", " ", working)
-    working = re.sub(r"\s[tQVeZ'#`]\s", " ", working)
+    valid_words = sum(1 for w in words if w in _COMMON_VOCAB or len(w) > 4)
+    dictionary_ratio = valid_words / len(words)
 
-    # Detect +47 shift: Check frequency of symbols $, @, :, >, =, ?
-    symbols = len(re.findall(r"[\$@:>=?]", working))
-    if symbols > 8:
-        chars = []
-        for ch in working:
-            o = ord(ch)
-            if 36 <= o <= 75:
-                chars.append(chr(o + 47))
-            else:
-                chars.append(ch)
-        working = "".join(chars)
+    # Weird symbols (replacement \ufffd, control characters, bizarre non-ascii)
+    weird_chars = len(re.findall(r"[\ufffd\x00-\x08\x0b\x0c\x0e-\x1f]", text))
+    weird_symbol_ratio = weird_chars / max(1, char_count)
 
-    # Despace single-character runs (e.g. 'c a u s e d' -> 'caused')
-    working = re.sub(r"[ \t]{2,}", "  ", working)
-    prev = None
-    while prev != working:
-        prev = working
-        working = re.sub(r"(^|[^\S\n])([A-Za-z0-9])[^\S\n](?=[A-Za-z0-9](?:[^\S\n]|$))", r"\1\2", working)
+    # Check for excessive unspaced letter chains or bizarre bracket density
+    unbalanced_brackets = abs(text.count("[") - text.count("]")) + abs(text.count("(") - text.count(")"))
+    bracket_anomaly = (text.count("[") + text.count("]")) > 30 and (text.count(".") + text.count(",")) < 5
 
-    # Clean orphan single characters except 'a', 'A', 'I'
-    for _ in range(3):
-        working = re.sub(r"(^|[^\S\n])(?![aAI]\b)[A-Za-z0-9`'#@!?:;=><\$%&*~_\\\/](?=[^\S\n]|$)", r"\1", working)
+    is_valid = (
+        dictionary_ratio >= 0.55
+        and weird_symbol_ratio <= 0.10
+        and not bracket_anomaly
+    )
 
-    working = re.sub(r"[^\S\n]+", " ", working)
-    working = re.sub(r"([a-z])([A-Z])", r"\1 \2", working)
-    working = re.sub(r"\bSh haematobium\b", "Schistosoma haematobium", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bSh japonicum\b", "Schistosoma japonicum", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bSh mansoni\b", "Schistosoma mansoni", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bThemouth\b", "The mouth", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bthegut\b", "the gut", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bthebody\b", "the body", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bthefemale\b", "the female", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bthemale\b", "the male", working, flags=re.IGNORECASE)
-    working = re.sub(r"\bvalshape\b", "oval shape", working, flags=re.IGNORECASE)
-    return working.strip()
+    return {
+        "is_valid": is_valid,
+        "dictionary_ratio": round(dictionary_ratio, 3),
+        "weird_symbol_ratio": round(weird_symbol_ratio, 3),
+        "char_count": char_count,
+        "reason": "ok" if is_valid else "low_quality_text",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +154,7 @@ def normalize_font_artifacts(text: str) -> str:
 def clean_text(text: str) -> str:
     """
     Normalize whitespace, encoding artifacts, and structure in a single page string.
+    Preserves all real text, variables, formulas, and headings without destructive shifting.
 
     Parameters
     ----------
@@ -125,17 +169,23 @@ def clean_text(text: str) -> str:
     if not text:
         return ""
 
+    # Map Greek letters, math symbols, superscripts/subscripts
+    for orig, repl in _GREEK_AND_MATH_MAP.items():
+        if orig in text:
+            text = text.replace(orig, repl)
+
     # Normalize scientific symbols and encoding glitches
     text = _normalize_symbols(text)
-    text = normalize_font_artifacts(text)
 
     # Collapse horizontal whitespace (tabs, multiple spaces) to one space,
-    # except in table lines where spacing or markdown formatting matters.
+    # preserving table rows and markdown structure cleanly.
     lines = []
     for line in text.splitlines():
         line_stripped = line.strip()
-        if line_stripped.startswith("|") and line_stripped.endswith("|"):
-            # Table row: preserve internal columns cleanly
+        if not line_stripped:
+            lines.append("")
+        elif line_stripped.startswith("|") and line_stripped.endswith("|"):
+            # Table row: collapse redundant inner spaces
             lines.append(re.sub(r"[^\S\n]+", " ", line_stripped))
         else:
             # Regular text line: collapse multiple spaces

@@ -197,78 +197,171 @@ function decodeHexPdfString(hex, cMap = null) {
   return out;
 }
 
-// Detect and repair font glyph encodings, Caesar shifts, and kerning noise
+// Scientific symbol, subscript, and Greek letter normalization
+const GREEK_AND_MATH_MAP = {
+  "\u03b1": "alpha", "\u03b2": "beta", "\u03b3": "gamma", "\u03b4": "delta",
+  "\u0394": "Delta", "\u03b5": "epsilon", "\u03b8": "theta", "\u03bb": "lambda",
+  "\u03bc": "mu", "\u03bd": "nu", "\u03c0": "pi", "\u03c1": "rho",
+  "\u03c3": "sigma", "\u03c4": "tau", "\u03c6": "phi", "\u03c8": "psi", "\u03c9": "omega",
+  "\u2192": " -> ", "\u21cc": " <=> ", "\u2194": " <-> ", "\u21d2": " => ",
+  "\u2264": " <= ", "\u2265": " >= ", "\u2260": " != ", "\u2248": " ~= ",
+  "\u00b1": " +/- ", "\u00d7": " x ", "\u2212": "-",
+  "\u2070": "^0", "\u00b9": "^1", "\u00b2": "^2", "\u00b3": "^3",
+  "\u2074": "^4", "\u2075": "^5", "\u2076": "^6", "\u2077": "^7", "\u2078": "^8", "\u2079": "^9",
+  "\u207a": "^+", "\u207b": "^-",
+  "\u2080": "_0", "\u2081": "_1", "\u2082": "_2", "\u2083": "_3",
+  "\u2084": "_4", "\u2085": "_5", "\u2086": "_6", "\u2087": "_7", "\u2088": "_8", "\u2089": "_9",
+};
+
+const COMMON_VOCAB_SET = new Set([
+  "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", "for", "on", "are",
+  "as", "with", "his", "they", "i", "at", "be", "this", "have", "from", "or", "one", "had", "by",
+  "word", "but", "not", "what", "all", "were", "we", "when", "your", "can", "said", "there", "use",
+  "an", "each", "which", "she", "do", "how", "their", "if", "will", "up", "other", "about", "out",
+  "many", "then", "them", "these", "so", "some", "her", "would", "make", "like", "him", "into",
+  "time", "has", "look", "two", "more", "write", "go", "see", "number", "no", "way", "could",
+  "people", "my", "than", "first", "water", "been", "call", "who", "oil", "its", "now", "find",
+  "atom", "atomic", "electron", "proton", "neutron", "nucleus", "orbit", "orbital", "energy",
+  "level", "quantum", "number", "mass", "charge", "ratio", "experiment", "model", "structure",
+  "bond", "bonding", "chemical", "covalent", "ionic", "molecule", "molecular", "compound",
+  "reaction", "equilibrium", "thermodynamics", "enthalpy", "entropy", "free", "gibbs",
+  "state", "gas", "liquid", "solid", "pressure", "volume", "temperature", "equation",
+  "acid", "base", "solution", "concentration", "molar", "solubility", "buffer", "redox",
+  "oxidation", "reduction", "electrode", "potential", "cell", "current", "hybrid", "hybridization",
+  "resonance", "organic", "carbon", "isomer", "nomenclature", "formula", "law", "constant",
+  "table", "figure", "diagram", "process", "rule", "theory", "discovery", "particles",
+  "chapter", "section", "topic", "summary", "exercise", "example", "problem", "solution"
+]);
+
+// Non-destructive text cleaner: preserves real textbook text, symbols, math variables, and markdown tables
 function normalizeAndRepairText(text) {
   if (!text) return "";
   let working = text;
 
-  // 1. Detect Caesar -1 shift (e.g. TDIJTUPTPNB -> Schistosoma, QBSTJF -> parasite)
-  if (/T\s*D\s*I\s*J\s*T\s*U\s*P\s*T\s*P\s*N\s*B/i.test(working)) {
-    working = working.replace(/T\s*D\s*I\s*J\s*T\s*U\s*P\s*T\s*P\s*N\s*B/gi, "Schistosoma");
-    working = working.replace(/Q\s*B\s*S\s*B\s*T\s*J\s*U\s*F/gi, "parasite");
+  // Map Greek letters and math symbols
+  for (const [k, v] of Object.entries(GREEK_AND_MATH_MAP)) {
+    if (working.includes(k)) working = working.replaceAll(k, v);
   }
 
-  // 2. Detect ROT-3 shift (e.g. 3 U H V H Q W H G -> Presented, 0 D K L -> Mahi)
-  if (/U\s*H\s*V\s*H\s*Q\s*W\s*H\s*G/i.test(working)) {
-    working = working.replace(/3?\s*U\s*H\s*V\s*H\s*Q\s*W\s*H\s*G/gi, "Presented");
-    working = working.replace(/E\s*\\\s*0\s*D\s*K\s*L\s*\*?\s*U\s*R\s*X\s*S/gi, "by Mahi Group");
-  }
+  // Standardize quotes and dashes
+  working = working.replaceAll("\u2018", "'").replaceAll("\u2019", "'")
+                   .replaceAll("\u201c", '"').replaceAll("\u201d", '"')
+                   .replaceAll("\u2013", "-").replaceAll("\u2014", "--")
+                   .replaceAll("\u2022", "* ").replaceAll("\u00a0", " ");
 
-  // 3. Strip repetitive orphan noise (e.g. 't t t t t' or 'Q t t Q t')
-  working = working.replace(/(?:[tQVeZ'#`]\s*){3,}/g, " ");
-  working = working.replace(/\s[tQVeZ'#`]\s/g, " ");
+  // Remove unprintable control characters (except \n, \r, \t)
+  working = working.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
 
-  // 4. Detect +47 font glyph shift ($49:DE@D@... or 42FD65)
-  const symbolCount = (working.match(/[\$@:>=?]/g) || []).length;
-  if (symbolCount > 8) {
-    let converted = "";
-    for (let i = 0; i < working.length; i++) {
-      const c = working.charCodeAt(i);
-      if (c >= 36 && c <= 75) {
-        converted += String.fromCharCode(c + 47);
-      } else {
-        converted += working[i];
-      }
+  // Collapse spaces while preserving table borders
+  const lines = working.split("\n");
+  const cleanedLines = lines.map(line => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      return trimmed.replace(/[^\S\n]+/g, " ");
     }
-    working = converted;
+    return trimmed.replace(/[^\S\n]+/g, " ");
+  });
+
+  return cleanedLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// Page Quality Evaluation: Detects corrupted encoding or scanned image pages
+function checkPageQuality(text) {
+  if (!text) return { isValid: false, dictionaryRatio: 0, reason: "empty" };
+  const rawClean = text.replace(/\s+/g, "");
+  if (rawClean.length < 30) return { isValid: false, dictionaryRatio: 0, reason: "too_short" };
+
+  const words = (text.match(/[A-Za-z]{2,}/g) || []).map(w => w.toLowerCase());
+  if (words.length === 0) return { isValid: false, dictionaryRatio: 0, reason: "no_words" };
+
+  let validCount = 0;
+  for (const w of words) {
+    if (COMMON_VOCAB_SET.has(w) || w.length > 4) validCount++;
+  }
+  const ratio = validCount / words.length;
+
+  const weirdSymbols = (text.match(/[\ufffd\x00-\x08\x0b\x0c\x0e-\x1f]/g) || []).length;
+  const weirdRatio = weirdSymbols / Math.max(1, rawClean.length);
+
+  const bracketAnomaly = (text.split("[").length - 1 + text.split("]").length - 1) > 30 &&
+                         (text.split(".").length - 1 + text.split(",").length - 1) < 5;
+
+  const isValid = ratio >= 0.55 && weirdRatio <= 0.10 && !bracketAnomaly;
+  return { isValid, dictionaryRatio: Math.round(ratio * 1000) / 1000, charCount: rawClean.length };
+}
+
+// Hierarchical Outline Generator (Chapter > Topic > Subtopic)
+function buildHierarchicalOutline(text, totalPages = 1) {
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const subtopics = [];
+  let currentChapter = "General Overview";
+  let currentTopic = "Foundational Principles";
+  let currentSubtopicTitle = "";
+  let currentBuffer = [];
+  let startPage = 1;
+  let subtopicIdx = 0;
+
+  function flushSubtopic() {
+    if (currentBuffer.length === 0 && !currentSubtopicTitle) return;
+    subtopicIdx++;
+    const excerpt = currentBuffer.join("\n").trim();
+    const pageNum = Math.min(totalPages, Math.max(1, Math.ceil((subtopicIdx / 45) * totalPages)));
+    subtopics.push({
+      id: `subtopic_${subtopicIdx}`,
+      chapter: currentChapter,
+      topic: currentTopic,
+      subtopic: currentSubtopicTitle || `${currentTopic} — Core Concepts`,
+      source_pages: [startPage, pageNum],
+      content: excerpt || `${currentTopic}: key definitions, mechanisms, and formulas.`,
+    });
+    currentBuffer = [];
   }
 
-  // 5. Clean up single-letter spacing (e.g. "c a u s e d" -> "caused", "m e m b e r s" -> "members")
-  working = working.replace(/[ \t]{2,}/g, "  ");
-  let prev;
-  do {
-    prev = working;
-    working = working.replace(/(^|[^\S\n])([A-Za-z0-9])[^\S\n](?=[A-Za-z0-9](?:[^\S\n]|$))/g, "$1$2");
-  } while (prev !== working);
+  for (const line of lines) {
+    // 1. Chapter Match
+    const chMatch = line.match(/^(?:Chapter|Unit|Module|PART)\s+[\dIVXLCDM]+[:\s\-]*(.*)$/i);
+    if (chMatch) {
+      flushSubtopic();
+      currentChapter = line;
+      currentTopic = chMatch[1].trim() || line;
+      currentSubtopicTitle = line;
+      startPage = Math.min(totalPages, Math.max(1, Math.ceil((subtopicIdx / 45) * totalPages)));
+      continue;
+    }
 
-  // 6. Clean orphan single characters except 'a', 'A', 'I'
-  for (let k = 0; k < 3; k++) {
-    working = working.replace(/(^|[^\S\n])(?![aAI]\b)[A-Za-z0-9`'#@!?:;=><\$%&*~_\\\/](?=[^\S\n]|$)/g, "$1");
+    // 2. Topic Match (e.g. 1.1 Discovery, 2.4 VSEPR)
+    const topicMatch = line.match(/^(\d+\.\d+)\s+[:\s\-]*(.*)$/);
+    if (topicMatch) {
+      flushSubtopic();
+      currentTopic = line;
+      currentSubtopicTitle = line;
+      startPage = Math.min(totalPages, Math.max(1, Math.ceil((subtopicIdx / 45) * totalPages)));
+      continue;
+    }
+
+    // 3. Sub-heading or Table Landmark
+    const isSubHeading = line.match(/^(?:Summary|Key Concepts|Formulas|\[STRUCTURED TABLES|\[FIGURE)/i) ||
+                        (line.length > 5 && line.length < 65 && line.toUpperCase() === line && !line.endsWith("."));
+    if (isSubHeading && currentBuffer.length >= 3) {
+      flushSubtopic();
+      currentSubtopicTitle = line.replace(/^\[(?:FIGURE \/ DIAGRAM:|STRUCTURED TABLES.*?):?\s*/i, "").replace(/\]$/, "");
+      continue;
+    }
+
+    currentBuffer.push(line);
   }
+  flushSubtopic();
 
-  // 7. Common cleanups and terminology restoration
-  working = working.replace(/[^\S\n]+/g, " ")
-                   .replace(/([a-z])([A-Z])/g, "$1 $2")
-                   .replace(/\bSh haematobium\b/gi, "Schistosoma haematobium")
-                   .replace(/\bSh japonicum\b/gi, "Schistosoma japonicum")
-                   .replace(/\bSh mansoni\b/gi, "Schistosoma mansoni")
-                   .replace(/\bThemouth\b/gi, "The mouth")
-                   .replace(/\bthegut\b/gi, "the gut")
-                   .replace(/\btheremaining\b/gi, "the remaining")
-                   .replace(/\bthebody\b/gi, "the body")
-                   .replace(/\binbeing\b/gi, "in being")
-                   .replace(/\bthefemale\b/gi, "the female")
-                   .replace(/\bthemale\b/gi, "the male")
-                   .replace(/\bthiscanal\b/gi, "this canal")
-                   .replace(/\btheposition\b/gi, "the position")
-                   .replace(/\btheuterus\b/gi, "the uterus")
-                   .replace(/\btheovary\b/gi, "the ovary")
-                   .replace(/\bthepole\b/gi, "the pole")
-                   .replace(/\bvalshape\b/gi, "oval shape")
-                   .replace(/\bshits\b/gi, "schist")
-                   .trim();
-
-  return working;
+  return subtopics.length >= 5 ? subtopics : [
+    {
+      id: "subtopic_1",
+      chapter: "Chapter 1: Foundational Principles",
+      topic: "1.1 Core Principles",
+      subtopic: "Atomic & Molecular Fundamentals",
+      source_pages: [1],
+      content: lines.slice(0, 40).join("\n"),
+    }
+  ];
 }
 
 // High-precision, high-speed PDF text and page extractor with robust stream matching
@@ -910,57 +1003,253 @@ async function handleApiRequest(request, env) {
       });
     }
 
-    if (path === "/api/study/deep-notes" || path === "/api/study/quick-notes") {
+    if (path === "/api/study/deep-notes") {
       const body = await request.json();
       const doc = await getDoc(env, body.document_id);
       if (!doc) return errorResponse("Document not found", 404);
 
-      const representativeText = getRepresentativeContext(doc, 7500);
-      const isQuick = path.includes("quick-notes");
-      const kind = isQuick ? "quick-notes" : "deep-notes";
+      const outline = buildHierarchicalOutline(doc.text, doc.page_count);
 
-      const prompt = isQuick
-        ? `You are an elite educational AI. Create a high-yield rapid revision sheet based on this textbook content.
-Document: ${doc.filename}
-Textbook Excerpts:
-${representativeText}
+      // Group outline subtopics by chapter
+      const byChapter = new Map();
+      for (const s of outline) {
+        if (!byChapter.has(s.chapter)) byChapter.set(s.chapter, []);
+        byChapter.get(s.chapter).push(s);
+      }
 
-Requirements:
-- 4 to 6 concise revision sections with descriptive headings.
-- Include: Essential Formulas with parameter definitions, High-Priority Definitions, Crucial Scientific Distinctions, and Memory Mnemonics.
-- Cite accurate source_pages.`
-        : `You are an elite educational AI and master professor. Create comprehensive, in-depth study notes across all chapters and sections in this textbook.
-Document: ${doc.filename}
-Textbook Excerpts:
-${representativeText}
+      const allSubtopics = [];
+      const sectionsList = [];
 
-Requirements:
-- 5 to 8 structured, thorough sections covering the full uploaded content.
-- For each section, provide: Overview, Key Definitions, Visual & Diagram Mechanisms (explicitly explaining any diagrams, figures, or structures in depth), Step-by-Step Mechanisms, Exact Formulas & Units, Worked Examples, and Exam Takeaways.
-- Cite accurate source_pages.`;
+      for (const [chapterName, subtopicsList] of byChapter.entries()) {
+        const pagesSet = new Set();
+        for (const s of subtopicsList) {
+          if (Array.isArray(s.source_pages)) for (const p of s.source_pages) pagesSet.add(p);
+        }
+        const pagesArr = Array.from(pagesSet).sort((a, b) => a - b);
+        const subtopicTitles = subtopicsList.map(s => s.subtopic);
+        const chapterExcerpt = subtopicsList.map(s => s.content || "").join("\n\n").slice(0, 4500);
 
-      const schema = {
-        type: "OBJECT",
-        properties: {
-          title: { type: "STRING" },
-          sections: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                heading: { type: "STRING" },
-                content: { type: "STRING" },
-                source_pages: { type: "ARRAY", items: { type: "INTEGER" } },
+        const prompt = `You are an elite academic professor creating 10/10 master study notes for: ${chapterName}.
+Source Textbook Content (Pages ${pagesArr.join(", ")}):
+${chapterExcerpt}
+
+Generate in-depth, structured study notes for EACH of these subtopics:
+${JSON.stringify(subtopicTitles)}
+
+Strict Rules:
+1. One subtopic = one concept. No giant walls of text.
+2. Definition: 1-2 sentence crystal-clear, formal definition.
+3. Plain Explanation: Concise pedagogical bullets breaking down the mechanism.
+4. Formulas: Write ALL mathematical and chemical formulas in valid LaTeX ($...$ or $$...$$) with parameter definitions.
+5. Worked Example: Exactly one realistic worked numerical/conceptual problem with step-by-step solution.
+6. Comparison Table: Clean Markdown table contrasting key concepts if applicable (or empty string).
+7. Common Mistakes: 2-3 specific traps students fall into on exams.
+8. Exam Tips: 2-3 high-yield testing takeaways.
+9. Grounding: Rely strictly on the source. If unverified, flag as "[check source p.X]". Never invent facts.
+
+Return ONLY a valid JSON object matching:
+{
+  "subtopics": [
+    {
+      "subtopic": "exact subtopic title",
+      "definition": "...",
+      "explanation": "...",
+      "formulas": ["$...$"],
+      "worked_example": {"problem": "...", "solution": "..."},
+      "comparison_table": "markdown table string or empty",
+      "common_mistakes": ["..."],
+      "exam_tips": ["..."],
+      "source_pages": [1]
+    }
+  ]
+}`;
+
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            subtopics: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  subtopic: { type: "STRING" },
+                  definition: { type: "STRING" },
+                  explanation: { type: "STRING" },
+                  formulas: { type: "ARRAY", items: { type: "STRING" } },
+                  worked_example: {
+                    type: "OBJECT",
+                    properties: { problem: { type: "STRING" }, solution: { type: "STRING" } },
+                  },
+                  comparison_table: { type: "STRING" },
+                  common_mistakes: { type: "ARRAY", items: { type: "STRING" } },
+                  exam_tips: { type: "ARRAY", items: { type: "STRING" } },
+                  source_pages: { type: "ARRAY", items: { type: "INTEGER" } },
+                },
+                required: ["subtopic", "definition", "explanation"],
               },
-              required: ["heading", "content"],
             },
           },
-        },
-        required: ["title", "sections"],
-      };
+          required: ["subtopics"],
+        };
 
-      const result = await callAI(env, prompt, schema, { doc, kind });
-      doc.materials[kind] = result;
+        let genByTitle = new Map();
+        try {
+          const aiRes = await callAI(env, prompt, schema, { doc, kind: "deep-notes" });
+          const list = Array.isArray(aiRes?.subtopics) ? aiRes.subtopics : [];
+          for (const item of list) {
+            if (item?.subtopic) genByTitle.set(item.subtopic.toLowerCase(), item);
+          }
+        } catch (err) {
+          console.warn(`Subtopic generation for ${chapterName} failed:`, err?.message);
+        }
+
+        for (const s of subtopicsList) {
+          const matched = genByTitle.get(s.subtopic.toLowerCase());
+          const subDict = {
+            subtopic_id: s.id,
+            chapter: s.chapter,
+            topic: s.topic,
+            subtopic: s.subtopic,
+            source_pages: s.source_pages || [1],
+            definition: matched?.definition || `Core principles and definitions for ${s.subtopic}.`,
+            explanation: matched?.explanation || s.content || "Detailed conceptual breakdown from source text.",
+            formulas: matched?.formulas || [],
+            worked_example: matched?.worked_example || "",
+            comparison_table: matched?.comparison_table || "",
+            common_mistakes: matched?.common_mistakes || [],
+            exam_tips: matched?.exam_tips || [],
+            figures: [],
+          };
+          allSubtopics.push(subDict);
+
+          const parts = [];
+          if (subDict.definition) parts.push(`### Definition\n${subDict.definition}`);
+          if (subDict.explanation) parts.push(`### Plain Explanation\n${subDict.explanation}`);
+          if (subDict.formulas?.length) parts.push(`### Mathematical & Chemical Formulas\n${subDict.formulas.map(f => `* ${f}`).join('\n')}`);
+          if (subDict.worked_example) {
+            const ex = subDict.worked_example;
+            if (typeof ex === 'object' && ex.problem) {
+              parts.push(`### Worked Example\n**Problem:** ${ex.problem}\n\n**Step-by-Step Solution:** ${ex.solution || ''}`);
+            } else if (typeof ex === 'string') {
+              parts.push(`### Worked Example\n${ex}`);
+            }
+          }
+          if (subDict.comparison_table) parts.push(`### Key Distinctions & Comparison\n${subDict.comparison_table}`);
+          if (subDict.common_mistakes?.length) parts.push(`### Common Mistakes & Traps\n${subDict.common_mistakes.map(m => `* ⚠️ ${m}`).join('\n')}`);
+          if (subDict.exam_tips?.length) parts.push(`### High-Yield Exam Tips\n${subDict.exam_tips.map(t => `* 🎯 ${t}`).join('\n')}`);
+
+          sectionsList.push({
+            heading: s.topic !== s.subtopic ? `${s.topic} - ${s.subtopic}` : s.subtopic,
+            content: parts.length ? parts.join('\n\n') : (s.content || "Detailed study notes."),
+            source_pages: s.source_pages || [1],
+          });
+        }
+      }
+
+      const result = {
+        title: `${doc.filename} — Master Study Guide`,
+        subtopics: allSubtopics,
+        sections: sectionsList,
+      };
+      doc.materials["deep-notes"] = result;
+      await saveDoc(env, doc.document_id, doc);
+      return jsonResponse(result);
+    }
+
+    if (path === "/api/study/quick-notes") {
+      const body = await request.json();
+      const doc = await getDoc(env, body.document_id);
+      if (!doc) return errorResponse("Document not found", 404);
+
+      const outline = buildHierarchicalOutline(doc.text, doc.page_count);
+
+      // Group outline by (chapter, topic)
+      const byTopic = new Map();
+      for (const s of outline) {
+        const key = `${s.chapter}:::${s.topic}`;
+        if (!byTopic.has(key)) byTopic.set(key, { chapter: s.chapter, topic: s.topic, subtopics: [] });
+        byTopic.get(key).subtopics.push(s);
+      }
+
+      const allTopics = [];
+      const sectionsList = [];
+
+      for (const { chapter, topic, subtopics } of byTopic.values()) {
+        const pagesSet = new Set();
+        for (const s of subtopics) {
+          if (Array.isArray(s.source_pages)) for (const p of s.source_pages) pagesSet.add(p);
+        }
+        const pagesArr = Array.from(pagesSet).sort((a, b) => a - b);
+        const topicExcerpt = subtopics.map(s => s.content || "").join("\n\n").slice(0, 4000);
+
+        const prompt = `You are an elite tutor creating a high-yield, 1-screen rapid revision card.
+Chapter: ${chapter}
+Topic: ${topic}
+Source Content (Pages ${pagesArr.join(", ")}):
+${topicExcerpt}
+
+Requirements:
+1. Bullets: Exactly 5 to 8 tight, high-yield bullet points summarizing core concepts. Must fit on one screen!
+2. Key Formulas: Essential formulas in LaTeX ($...$) with parameter names.
+3. Memory Trick: Exactly one clever, memorable mnemonic or one-line memory trick.
+4. Grounding: Rely strictly on the source. Do not add facts that aren't in the source.
+
+Return ONLY a valid JSON object matching:
+{
+  "bullets": ["bullet 1", "bullet 2", ...],
+  "key_formulas": ["$...$"],
+  "memory_trick": "one line mnemonic"
+}`;
+
+        const schema = {
+          type: "OBJECT",
+          properties: {
+            bullets: { type: "ARRAY", items: { type: "STRING" } },
+            key_formulas: { type: "ARRAY", items: { type: "STRING" } },
+            memory_trick: { type: "STRING" },
+          },
+          required: ["bullets"],
+        };
+
+        let data = {};
+        try {
+          data = await callAI(env, prompt, schema, { doc, kind: "quick-notes" });
+        } catch (err) {
+          console.warn(`Quick notes for ${topic} failed:`, err?.message);
+        }
+
+        const bullets = Array.isArray(data?.bullets) && data.bullets.length ? data.bullets : subtopics.map(s => s.subtopic).slice(0, 8);
+        const keyFormulas = Array.isArray(data?.key_formulas) ? data.key_formulas : [];
+        const memoryTrick = data?.memory_trick || "";
+
+        const topicId = `topic_${allTopics.length + 1}`;
+        allTopics.push({
+          topic_id: topicId,
+          chapter,
+          topic,
+          source_pages: pagesArr.length ? pagesArr : [1],
+          bullets,
+          key_formulas: keyFormulas,
+          memory_trick: memoryTrick,
+        });
+
+        let secContent = bullets.map(b => `* ${b}`).join("\n");
+        if (keyFormulas.length) secContent += `\n\n**Key Formulas:**\n` + keyFormulas.map(f => `* ${f}`).join("\n");
+        if (memoryTrick) secContent += `\n\n**Memory Trick (Mnemonic):** ${memoryTrick}`;
+
+        sectionsList.push({
+          heading: topic,
+          content: secContent,
+          source_pages: pagesArr.length ? pagesArr : [1],
+        });
+      }
+
+      const result = {
+        title: `${doc.filename} — Quick Revision Sheets`,
+        topics: allTopics,
+        sections: sectionsList,
+      };
+      doc.materials["quick-notes"] = result;
       await saveDoc(env, doc.document_id, doc);
       return jsonResponse(result);
     }
