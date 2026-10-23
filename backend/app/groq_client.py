@@ -34,7 +34,7 @@ T = TypeVar("T", bound=BaseModel)
 # Vector embedding dimensions
 # ---------------------------------------------------------------------------
 
-EMBEDDING_DIMENSIONS = 256
+EMBEDDING_DIMENSIONS = 384
 
 
 # ---------------------------------------------------------------------------

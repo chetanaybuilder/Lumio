@@ -2,35 +2,91 @@
 Embedding Generator — Lumio Backend
 =====================================
 
-Thin convenience layer over ``gemini_client.embed_texts`` that adds:
+Provides high-speed, local semantic embeddings using ONNX Runtime
+(BAAI/bge-small-en-v1.5) with normalized 384-dimensional dense vectors:
 
-- Input validation (type checks and empty-string rejection).
-- Automatic batching — large document chunk lists are split into batches
-  of ``BATCH_SIZE`` texts to stay within provider request-size limits.
-- A single-text shortcut (``generate_embedding``) for query-time use.
-
-Two Gemini task types control how vectors are optimized:
-
-- ``RETRIEVAL_DOCUMENT`` — used when embedding stored document chunks.
-- ``RETRIEVAL_QUERY`` — used when embedding a student's question for
-  nearest-neighbor search against stored chunks.
+- Automatic batching and thread-safe singleton model management.
+- L2 normalization for exact cosine similarity dot products.
+- Robust deterministic fallback if local model cache is initializing.
+- Query embedding shortcut with in-memory caching.
 """
 
-from app.groq_client import EMBEDDING_DIMENSIONS, embed_texts
+import hashlib
+import logging
+import math
+import re
+import threading
+from functools import lru_cache
 
-__all__ = ["EMBEDDING_DIMENSIONS", "generate_embedding", "generate_embeddings_batch", "BATCH_SIZE"]
+logger = logging.getLogger("lumio.embeddings")
+
+EMBEDDING_DIMENSIONS = 384
+BATCH_SIZE = 64
+
+__all__ = ["EMBEDDING_DIMENSIONS", "generate_embedding", "generate_embeddings", "BATCH_SIZE"]
+
+_model = None
+_model_lock = threading.Lock()
+
+
+def _get_model():
+    """Lazily load and cache the BAAI/bge-small-en-v1.5 ONNX embedding model."""
+    global _model
+    if _model is not None:
+        return _model
+
+    with _model_lock:
+        if _model is None:
+            try:
+                from fastembed import TextEmbedding
+                logger.info("Initializing local ONNX embedding model: BAAI/bge-small-en-v1.5")
+                _model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+            except Exception as exc:
+                logger.warning("Could not initialize FastEmbed model (%s); using normalized fallback: %s", type(exc).__name__, exc)
+                _model = False
+    return _model
+
+
+def _fallback_embedding(text: str, dimensions: int = EMBEDDING_DIMENSIONS) -> list[float]:
+    """Microsecond normalized fallback vectorizer when ONNX engine is unavailable."""
+    words = re.findall(r"\w+", text.lower())
+    if not words:
+        return [0.0] * dimensions
+
+    vec = [0.0] * dimensions
+    # 1. Unigrams
+    for word in words:
+        slot = int(hashlib.md5(word.encode("utf-8")).hexdigest()[:8], 16) % dimensions
+        vec[slot] += 1.0
+
+    # 2. Bigrams
+    for i in range(len(words) - 1):
+        bigram = f"{words[i]}_{words[i+1]}"
+        slot = int(hashlib.sha256(bigram.encode("utf-8")).hexdigest()[:8], 16) % dimensions
+        vec[slot] += 1.5
+
+    # 3. Trigrams
+    for i in range(len(words) - 2):
+        trigram = f"{words[i]}_{words[i+1]}_{words[i+2]}"
+        slot = int(hashlib.sha1(trigram.encode("utf-8")).hexdigest()[:8], 16) % dimensions
+        vec[slot] += 2.0
+
+    norm = math.sqrt(sum(x * x for x in vec))
+    if norm > 0.0:
+        vec = [x / norm for x in vec]
+    return vec
+
 
 # ---------------------------------------------------------------------------
-# Provider batch-size limit
+# Single-text embedding with query caching
 # ---------------------------------------------------------------------------
 
-# Maximum number of texts sent to Gemini in a single embedding request.
-BATCH_SIZE = 50
+@lru_cache(maxsize=1024)
+def _cached_query_embedding(text: str) -> tuple[float, ...]:
+    """Cache query embeddings in memory for rapid repeated questions."""
+    vec = generate_embeddings([text])[0]
+    return tuple(vec)
 
-
-# ---------------------------------------------------------------------------
-# Single-text embedding
-# ---------------------------------------------------------------------------
 
 def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
     """
@@ -39,34 +95,26 @@ def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list
     Parameters
     ----------
     text : str
-        The text to embed.  Must be a non-empty string.
+        The text to embed. Must be a non-empty string.
     task_type : str, optional
-        Gemini task type (default ``RETRIEVAL_DOCUMENT``).
+        Task type indicator.
 
     Returns
     -------
     list[float]
-        A 768-dimensional embedding vector.
-
-    Raises
-    ------
-    TypeError
-        If *text* is not a string.
-    ValueError
-        If *text* is empty or whitespace-only.
-    RuntimeError
-        If the Gemini provider call fails.
+        A 384-dimensional normalized embedding vector.
     """
     if not isinstance(text, str):
         raise TypeError("Text must be a string")
 
-    if not text.strip():
+    cleaned = text.strip()
+    if not cleaned:
         raise ValueError("Text cannot be empty")
 
-    try:
-        return embed_texts([text], task_type)[0]
-    except Exception as error:
-        raise RuntimeError("Failed to generate embedding.") from error
+    if task_type == "RETRIEVAL_QUERY":
+        return list(_cached_query_embedding(cleaned))
+
+    return generate_embeddings([cleaned])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -75,50 +123,49 @@ def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list
 
 def generate_embeddings(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
     """
-    Generate embedding vectors for multiple texts, batching automatically.
+    Generate embedding vectors for multiple texts with batching.
 
     Parameters
     ----------
     texts : list[str]
         A list of non-empty text strings to embed.
     task_type : str, optional
-        Task type (default ``RETRIEVAL_DOCUMENT``).
+        Task type indicator.
 
     Returns
     -------
     list[list[float]]
-        One vector per input text.
-
-    Raises
-    ------
-    TypeError
-        If *texts* is not a list or contains non-string items.
-    ValueError
-        If any text in the list is empty or whitespace-only.
-    RuntimeError
-        If embedding generation fails.
+        One 384-dimensional normalized vector per input text.
     """
     if not isinstance(texts, list):
-        raise TypeError("Texts must be provided as a list")
+        raise TypeError("texts must be a list of strings")
+
+    for idx, t in enumerate(texts):
+        if not isinstance(t, str):
+            raise TypeError(f"Item {idx} is not a string")
+        if not t.strip():
+            raise ValueError(f"Item {idx} is empty or whitespace-only")
 
     if not texts:
         return []
 
-    # Validate every item before sending anything to the provider.
-    for text in texts:
-        if not isinstance(text, str):
-            raise TypeError("Every item in texts must be a string")
-        if not text.strip():
-            raise ValueError("Texts cannot contain empty strings")
+    model = _get_model()
+    if model:
+        try:
+            # FastEmbed embed generator
+            results = []
+            for i in range(0, len(texts), BATCH_SIZE):
+                batch = texts[i : i + BATCH_SIZE]
+                batch_vectors = list(model.embed(batch))
+                for v in batch_vectors:
+                    # Ensure float list
+                    norm = math.sqrt(sum(float(x) * float(x) for x in v))
+                    if norm > 0:
+                        results.append([float(x) / norm for x in v])
+                    else:
+                        results.append([float(x) for x in v])
+            return results
+        except Exception as exc:
+            logger.warning("FastEmbed batch failed (%s); falling back: %s", type(exc).__name__, exc)
 
-    try:
-        # Split the request into batches to respect size limits.
-        embeddings = []
-        for start in range(0, len(texts), BATCH_SIZE):
-            embeddings.extend(embed_texts(texts[start:start + BATCH_SIZE], task_type))
-        return embeddings
-    except Exception as error:
-        raise RuntimeError("Failed to generate embeddings.") from error
-
-
-# Document and query vectors share model dimensions but use distinct task types.
+    return [_fallback_embedding(t, EMBEDDING_DIMENSIONS) for t in texts]

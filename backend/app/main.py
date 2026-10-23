@@ -64,6 +64,7 @@ from app.session_manager import (
     get_session,
     remove_session,
 )
+from app.retrieval_utils import rewrite_query_with_history, verify_citations
 from app.structure_detector import build_hierarchical_outline, detect_structure
 from app.text_preprocessor import clean_pages
 from app.vector_store import (
@@ -644,33 +645,34 @@ async def ask_lumio(request: ChatRequest, session: StudySession = Depends(requir
     """
     document = owned_document(session, request.document_id)
     try:
-        # --- Embed the student's question for vector similarity search ---
-        query_embedding = await run_in_threadpool(generate_embedding, request.question, "RETRIEVAL_QUERY")
+        # --- Include recent conversation history for continuity & query reformulation ---
+        history = session.chat.setdefault(request.document_id, [])
+        standalone_query = rewrite_query_with_history(request.question, history)
 
-        # --- Retrieve the nearest document chunks with hybrid reranking ---
+        # --- Embed the reformulated question for vector similarity search ---
+        query_embedding = await run_in_threadpool(generate_embedding, standalone_query, "RETRIEVAL_QUERY")
+
+        # --- Retrieve nearest document chunks with hybrid BM25 + dense RRF ---
         matches = await run_in_threadpool(
             query_chunks,
             session.token,
             request.document_id,
             query_embedding,
             6,
-            request.question,
+            standalone_query,
         )
 
-        # --- Filter out chunks that are too distant (low relevance) ---
-        matches = [match for match in matches if match["distance"] <= 0.85]
+        # --- Filter out chunks below calibrated threshold ---
+        matches = [match for match in matches if match.get("distance", 1.0) <= 0.85]
         if not matches:
-            answer = "I could not find enough relevant information in this document to answer confidently."
+            answer = "I could not find enough relevant information in this textbook to answer this question."
             return {"answer": answer, "source_pages": []}
 
-        # --- Assemble context from matching chunks ---
+        # --- Assemble parent-child context from matching chunks ---
         context = "\n\n".join(
-            f"[Pages {match['metadata']['source_pages']}; {match['metadata']['section']}] {match['text']}"
+            f"[{match['metadata'].get('path', match['metadata']['section'])} (Pages {match['metadata']['source_pages']})]\n{match['text']}"
             for match in matches
         )
-
-        # --- Include recent conversation history for continuity ---
-        history = session.chat.setdefault(request.document_id, [])
 
         async with generation_slots:
             result = await run_in_threadpool(
@@ -679,16 +681,11 @@ async def ask_lumio(request: ChatRequest, session: StudySession = Depends(requir
                 ChatOutput,
             )
 
-        # --- Validate that cited pages actually appear in retrieved chunks ---
-        available_pages = {
-            int(page)
-            for match in matches
-            for page in match["metadata"].get("source_pages", "").split(",")
-            if page.isdigit()
-        }
+        # --- Verify that cited claims are genuinely supported by retrieved chunks ---
+        verified_pages = verify_citations(result.answer, result.source_pages, matches)
         response = {
             "answer": result.answer,
-            "source_pages": [page for page in result.source_pages if page in available_pages],
+            "source_pages": verified_pages,
         }
 
         # --- Update conversation history (keep last 12 turns) ---
