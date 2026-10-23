@@ -18,7 +18,6 @@ Pipeline:
 
 import re
 
-
 # ---------------------------------------------------------------------------
 # Scientific symbol and encoding normalization
 # ---------------------------------------------------------------------------
@@ -79,7 +78,7 @@ _COMMON_VOCAB = {
     "time", "has", "look", "two", "more", "write", "go", "see", "number", "no", "way", "could",
     "people", "my", "than", "first", "water", "been", "call", "who", "oil", "its", "now", "find",
     "atom", "atomic", "electron", "proton", "neutron", "nucleus", "orbit", "orbital", "energy",
-    "level", "quantum", "number", "mass", "charge", "ratio", "experiment", "model", "structure",
+    "level", "quantum", "mass", "charge", "ratio", "experiment", "model", "structure",
     "bond", "bonding", "chemical", "covalent", "ionic", "molecule", "molecular", "compound",
     "reaction", "equilibrium", "thermodynamics", "enthalpy", "entropy", "free", "gibbs",
     "state", "gas", "liquid", "solid", "pressure", "volume", "temperature", "equation",
@@ -90,8 +89,8 @@ _COMMON_VOCAB = {
     "principal", "momentum", "magnetic", "spin", "geometry", "shape", "linear", "trigonal",
     "tetrahedral", "octahedral", "pyramidal", "bent", "dipole", "polar", "nonpolar",
     "boiling", "melting", "point", "vapour", "colligative", "osmotic", "factor", "catalyst",
-    "rate", "half", "life", "first", "second", "zero", "order", "activation", "mechanism",
-    "chapter", "section", "topic", "summary", "exercise", "example", "problem", "solution",
+    "rate", "half", "life", "second", "zero", "order", "activation", "mechanism",
+    "chapter", "section", "topic", "summary", "exercise", "example", "problem",
 }
 
 

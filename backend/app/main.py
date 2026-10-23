@@ -29,20 +29,14 @@ session cannot access another session's data.
 """
 
 import asyncio
-import json
 import logging
 from contextlib import asynccontextmanager, suppress
 from tempfile import NamedTemporaryFile
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from starlette.concurrency import run_in_threadpool
-
 from app.chunker import create_chunks
 from app.config import FRONTEND_ORIGINS, MAX_UPLOAD_BYTES, SESSION_TTL_SECONDS, TEMP_DIR
-from app.embedding_generator import generate_embeddings, generate_embedding
+from app.embedding_generator import generate_embedding, generate_embeddings
 from app.export_service import make_pdf
 from app.groq_client import generate_structured
 from app.pdf_extractor import (
@@ -56,17 +50,12 @@ from app.prompt_templates import chat_prompt, study_prompt
 from app.schemas import (
     ChatOutput,
     ChatRequest,
-    DeepNotesOutput,
     DocumentRequest,
     ExportRequest,
     FlashcardsOutput,
-    NoteSection,
     NotesOutput,
-    QuickNotesOutput,
     QuizOutput,
     QuizRequest,
-    SubtopicNote,
-    TopicQuickNote,
 )
 from app.session_manager import (
     StudySession,
@@ -77,8 +66,16 @@ from app.session_manager import (
 )
 from app.structure_detector import build_hierarchical_outline, detect_structure
 from app.text_preprocessor import clean_pages
-from app.vector_store import clear_all_chunks, delete_document, query_chunks, store_chunks
-
+from app.vector_store import (
+    clear_all_chunks,
+    delete_document,
+    query_chunks,
+    store_chunks,
+)
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 # ---------------------------------------------------------------------------
 # Logging and concurrency controls
@@ -742,12 +739,4 @@ async def export_pdf(request: ExportRequest, session: StudySession = Depends(req
 
 
 # Session ownership is enforced before every document operation.
-
-# Cloudflare Python Workers entrypoint (only available in Cloudflare Pyodide runtime)
-try:
-    import importlib
-    asgi = importlib.import_module("workers.asgi")
-    default = asgi.entrypoint(app)
-except (ImportError, ModuleNotFoundError):
-    default = None
 

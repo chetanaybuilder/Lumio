@@ -24,7 +24,6 @@ from app.main import app, require_session
 from app.session_manager import StudySession
 from fastapi.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # Health endpoint
 # ---------------------------------------------------------------------------
@@ -77,7 +76,7 @@ def test_upload_does_not_expose_provider_errors_or_leave_temp_files(monkeypatch,
     - The HTTP response must NOT contain internal error details.
     - The temporary upload file must be removed.
     """
-    import app.main as main
+    from app import main
 
     session = StudySession("owner", 9999999999)
     app.dependency_overrides[require_session] = lambda: session

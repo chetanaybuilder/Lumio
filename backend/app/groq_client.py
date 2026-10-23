@@ -22,10 +22,9 @@ import re
 from functools import lru_cache
 from typing import TypeVar
 
+from app.config import GROQ_API_KEY, GROQ_MODEL
 from groq import Groq
 from pydantic import BaseModel, ValidationError
-
-from app.config import GROQ_API_KEY, GROQ_MODEL
 
 logger = logging.getLogger(__name__)
 

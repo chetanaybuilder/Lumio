@@ -10,22 +10,18 @@ Deterministic unit tests for the text-processing and RAG pipeline:
 - ``pdf_extractor``      — error handling and scanned PDF detection.
 """
 
-import pytest
 import pymupdf
-
+import pytest
 from app.chunker import create_chunks
+from app.embedding_generator import EMBEDDING_DIMENSIONS
 from app.pdf_extractor import (
     PDFCorruptedError,
-    PDFEncryptedError,
-    PDFPageLimitError,
     PDFScannedError,
     extract_text_from_pdf,
 )
 from app.structure_detector import detect_structure
 from app.text_preprocessor import clean_pages, clean_text
 from app.vector_store import clear_all_chunks, query_chunks, store_chunks
-from app.embedding_generator import EMBEDDING_DIMENSIONS
-
 
 # ---------------------------------------------------------------------------
 # Text cleaning and scientific symbol normalization

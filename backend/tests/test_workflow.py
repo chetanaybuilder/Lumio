@@ -17,16 +17,13 @@ realistic educational content to exercise the extraction + chunking
 pipeline on real document structure.
 """
 
-from pathlib import Path
 
 import pymupdf
-from fastapi.testclient import TestClient
-
 from app.embedding_generator import EMBEDDING_DIMENSIONS
 from app.main import app, require_session
 from app.schemas import ChatOutput, FlashcardsOutput, NotesOutput, QuizOutput
 from app.session_manager import StudySession
-
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Test PDF content — realistic biology and science material
@@ -152,7 +149,7 @@ def test_real_pdf_workflows_isolation_generation_and_exports(monkeypatch, tmp_pa
     End-to-end test: upload → isolation check → generate all materials
     → export PDFs → delete documents → close sessions.
     """
-    import app.main as main
+    from app import main
 
     # Generate synthetic test PDFs.
     for filename, sections in PDF_CONTENT.items():
@@ -225,7 +222,7 @@ def test_real_pdf_workflows_isolation_generation_and_exports(monkeypatch, tmp_pa
 
 def test_invalid_pdf_is_rejected_and_temporary_file_is_removed(monkeypatch, tmp_path):
     """Non-PDF files should be rejected with 400 and no temp file left behind."""
-    import app.main as main
+    from app import main
 
     monkeypatch.setattr(main, "TEMP_DIR", tmp_path)
     session = StudySession("test-token", 9999999999)
@@ -245,7 +242,7 @@ def test_invalid_pdf_is_rejected_and_temporary_file_is_removed(monkeypatch, tmp_
 
 def test_oversized_upload_is_rejected_before_pdf_parsing(monkeypatch, tmp_path):
     """Files exceeding MAX_UPLOAD_BYTES should be rejected with 413."""
-    import app.main as main
+    from app import main
 
     monkeypatch.setattr(main, "TEMP_DIR", tmp_path)
     monkeypatch.setattr(main, "MAX_UPLOAD_BYTES", 8)
@@ -266,7 +263,7 @@ def test_oversized_upload_is_rejected_before_pdf_parsing(monkeypatch, tmp_path):
 
 def test_scanned_pdf_upload_is_rejected_with_422(monkeypatch, tmp_path):
     """A scanned photograph PDF with no selectable text must return 422 with actionable details."""
-    import app.main as main
+    from app import main
 
     monkeypatch.setattr(main, "TEMP_DIR", tmp_path)
     session = StudySession("test-token", 9999999999)
@@ -282,13 +279,12 @@ def test_scanned_pdf_upload_is_rejected_with_422(monkeypatch, tmp_path):
     doc.close()
 
     try:
-        with TestClient(app) as client:
-            with open(scanned_path, "rb") as f:
-                response = client.post(
-                    "/api/documents/upload",
-                    headers={"X-Session-Token": session.token},
-                    files={"file": ("scanned.pdf", f.read(), "application/pdf")},
-                )
+        with TestClient(app) as client, open(scanned_path, "rb") as f:
+            response = client.post(
+                "/api/documents/upload",
+                headers={"X-Session-Token": session.token},
+                files={"file": ("scanned.pdf", f.read(), "application/pdf")},
+            )
         assert response.status_code == 422
         assert "scanned" in response.json()["detail"].lower()
     finally:

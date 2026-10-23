@@ -56,22 +56,18 @@ logger = logging.getLogger("lumio.pdf_extractor")
 
 class PDFPageLimitError(ValueError):
     """Raised when a PDF exceeds the configured maximum page count."""
-    pass
 
 
 class PDFEncryptedError(ValueError):
     """Raised when a PDF is password-protected or encrypted."""
-    pass
 
 
 class PDFCorruptedError(ValueError):
     """Raised when a PDF is malformed, truncated, or unreadable."""
-    pass
 
 
 class PDFScannedError(ValueError):
     """Raised when a PDF contains scanned images or photos with no digital text."""
-    pass
 
 
 # ---------------------------------------------------------------------------

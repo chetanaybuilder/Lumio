@@ -10,9 +10,8 @@ override them through process environment variables.
 Environment variables
 ---------------------
 GROQ_API_KEY           : API key for Groq Cloud (high-speed LLM inference).
-GROQ_MODEL             : Text-generation model name (default: openai/gpt-oss-20b).
+GROQ_MODEL             : Text-generation model name (default: llama-3.3-70b-versatile).
 LUMIO_TEMP_DIR         : Writable directory for temporary upload files.
-LUMIO_CHROMA_DIR       : Persistent directory for the ChromaDB vector store.
 SESSION_TTL_SECONDS    : Sliding inactivity expiry for study sessions (seconds).
 MAX_UPLOAD_MB          : Maximum PDF upload size in megabytes.
 MAX_PDF_PAGES          : Maximum number of pages allowed in a single PDF.
@@ -21,8 +20,8 @@ FRONTEND_ORIGINS       : Comma-separated list of allowed CORS origins.
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
 # Path constants
@@ -34,9 +33,6 @@ load_dotenv(BASE_DIR / ".env")
 
 # Temporary directory for streamed PDF uploads before processing.
 TEMP_DIR = Path(os.getenv("LUMIO_TEMP_DIR", BASE_DIR / "temp"))
-
-# Persistent storage path for the ChromaDB vector database.
-CHROMA_DIR = Path(os.getenv("LUMIO_CHROMA_DIR", BASE_DIR / ".chroma"))
 
 
 # ---------------------------------------------------------------------------

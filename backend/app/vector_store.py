@@ -25,7 +25,6 @@ import threading
 
 from app.groq_client import EMBEDDING_DIMENSIONS
 
-
 # ---------------------------------------------------------------------------
 # Thread-safe in-memory store
 # ---------------------------------------------------------------------------

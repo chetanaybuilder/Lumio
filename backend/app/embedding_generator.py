@@ -18,6 +18,7 @@ Two Gemini task types control how vectors are optimized:
 
 from app.groq_client import EMBEDDING_DIMENSIONS, embed_texts
 
+__all__ = ["EMBEDDING_DIMENSIONS", "generate_embedding", "generate_embeddings_batch", "BATCH_SIZE"]
 
 # ---------------------------------------------------------------------------
 # Provider batch-size limit

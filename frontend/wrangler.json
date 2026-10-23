@@ -1,17 +1,5 @@
 {
   "name": "lumio-study",
   "pages_build_output_dir": "dist",
-  "compatibility_date": "2026-10-21",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-  "ai": {
-    "binding": "AI"
-  },
-  "kv_namespaces": [
-    {
-      "binding": "LUMIO_STORAGE",
-      "id": "ab94abb4a2be4e7d82dc8fc157cbba9e"
-    }
-  ]
+  "compatibility_date": "2026-10-21"
 }

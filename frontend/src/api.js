@@ -33,14 +33,6 @@ async function request(path, token, options = {}) {
   // Attach session token if provided.
   if (token) headers.set('X-Session-Token', token)
 
-  // Attach user-configured Groq API key if available in localStorage
-  try {
-    const userGroqKey = localStorage.getItem('lumio_groq_key')
-    if (userGroqKey && userGroqKey.trim()) {
-      headers.set('X-Groq-Api-Key', userGroqKey.trim())
-    }
-  } catch (_) {}
-
   // Auto-set JSON content type for non-FormData request bodies.
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 

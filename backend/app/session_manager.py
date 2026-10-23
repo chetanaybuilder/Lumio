@@ -28,7 +28,6 @@ from dataclasses import dataclass, field
 
 from app.config import SESSION_TTL_SECONDS
 
-
 # ---------------------------------------------------------------------------
 # Session data model
 # ---------------------------------------------------------------------------

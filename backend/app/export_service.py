@@ -23,10 +23,9 @@ from io import BytesIO
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 # ---------------------------------------------------------------------------
 # Main PDF builder

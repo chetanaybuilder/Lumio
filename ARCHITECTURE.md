@@ -8,7 +8,7 @@ The cleaner preserves text. The structure detector is heuristic; headings that d
 
 ## Embeddings and retrieval
 
-The centralized Groq client uses `openai/gpt-oss-20b` (or `qwen/qwen3.8-27b`) on Groq LPUs for sub-second and sub-5-second text generation. Local 256-dimensional deterministic n-gram normalized embeddings are generated instantly without external network overhead, eliminating external embedding rate limits. Cosine distance is used for nearest-neighbor similarity search. Every vector stores `session_id`, `document_id`, section, and source pages. Queries require both session and document filters; deletion uses both as well. A text-only document context is used for note generation, while Ask Lumio retrieves the nearest chunks and rejects distant matches.
+The centralized Groq client uses `llama-3.3-70b-versatile` (with `llama-3.1-8b-instant` as fallback) on Groq LPUs for high-speed, high-quality structured text generation. Local semantic and keyword embeddings provide dense and sparse vectors without external embedding rate limits. Cosine distance and BM25 are fused with Reciprocal Rank Fusion for nearest-neighbor similarity search. Every vector stores `session_id`, `document_id`, section, and source pages. Queries require both session and document filters; deletion uses both as well. A section-aware map-reduce pipeline is used for note generation, while Ask Lumio retrieves the nearest chunks and rejects matches below a calibrated similarity threshold.
 
 ## Generation and validation
 
@@ -47,8 +47,9 @@ All endpoints except `/health` and session creation require `X-Session-Token`.
 | POST | `/api/chat` | `document_id`, question | answer and retrieved source pages |
 | POST | `/api/export/pdf` | `document_id`, kind | PDF attachment |
 
-The browser uses Vite's `/api` proxy locally. Production deployments can set `VITE_API_BASE_URL`; backend CORS origins are controlled by `FRONTEND_ORIGINS`.
-
+The browser uses Vite's `/api` proxy locally. Production deployments configure `VITE_API_BASE_URL`; backend CORS origins are controlled by `FRONTEND_ORIGINS`.
+ 
 ## Deployment
+ 
+The application frontend is deployed to Cloudflare Pages (`lumio-study.pages.dev`) for global static CDN delivery. The backend is deployed as a containerized FastAPI service on a cloud provider (such as Fly.io, Render, or Railway) with access to PyMuPDF and Groq API.
 
-The application is deployed live to Cloudflare Pages (`lumio-study.pages.dev`). The Cloudflare Edge Worker routes all `/api/*` requests directly on Cloudflare Edge with ultra-low latency Groq LPU inference, responding in 1-3 seconds.

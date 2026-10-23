@@ -35,7 +35,7 @@
 | **🧪 Interactive Quizzes** | Multiple choice, true/false, and short answer practice problems complete with detailed explanations and difficulty levels. |
 | **🗂️ Active Recall Flashcards** | Front-and-back study cards formatted for active recall and spaced repetition. |
 | **💬 Ask Lumio (Contextual Q&A)** | Ask questions directly against your textbook. Every answer is strictly grounded in the document and cites exact source pages. |
-| **⚡ Sub-5-Second Inference** | Powered by Groq LPUs (`openai/gpt-oss-20b`), generating complete study outputs in 1–3 seconds. |
+| **⚡ High-Speed Inference** | Powered by Groq LPUs (`llama-3.3-70b-versatile`), generating high-quality structured study outputs with low latency. |
 | **📄 Styled PDF Export** | Download generated notes, quiz sheets, or flashcard decks as beautifully formatted, ready-to-print PDFs. |
 | **🔒 Ephemeral & Private** | Zero login required. Each tab receives an isolated, temporary session that self-cleans after inactivity. |
 
@@ -45,17 +45,17 @@
 
 ```mermaid
 graph TD
-    A[Textbook PDF Upload] --> B[PDF Extractor]
-    B --> C[Text Normalization & Structure Detector]
+    A[Textbook PDF Upload] --> B[PyMuPDF Structure-Aware Extractor]
+    B --> C[Text Normalization & Heading Detector]
     C --> D[Context Chunker & Heading Mapper]
-    D --> E[Fast Deterministic Feature Vectorizer]
-    E --> F[In-Memory Scoped Vector Store]
+    D --> E[Semantic Embeddings & BM25 Index]
+    E --> F[In-Memory Scoped Hybrid Vector Store]
     
-    F --> G[Ask Lumio: Cosine Retrieval]
-    D --> H[Study Prompt Assembler]
+    F --> G[Ask Lumio: Hybrid Retrieval + RRF]
+    D --> H[Map-Reduce Study Prompt Assembler]
     
-    G --> I[Groq LPU Engine: openai/gpt-oss-20b]
-    H --> I[Groq LPU Engine: openai/gpt-oss-20b]
+    G --> I[Groq LPU Engine: llama-3.3-70b-versatile]
+    H --> I[Groq LPU Engine: llama-3.3-70b-versatile]
     
     I --> J[Type-Safe Pydantic Output Validation]
     J --> K[Source Page Verification Filter]
@@ -65,19 +65,20 @@ graph TD
 
 ### 1. Document Extraction & Chunking
 - Ingestion accepts textbooks up to 500 pages and 20 MB.
-- Text is extracted, normalized, and partitioned into semantically coherent chunks mapped to exact page numbers.
+- Text is extracted with PyMuPDF layout analysis, preserving chemical formulas, math symbols, and tables, partitioned into semantically coherent chunks mapped to exact page numbers.
 
 ### 2. Grounded Vector Retrieval
-- Text chunks are indexed locally using high-speed normalized n-gram feature hashing vectors (256 dimensions).
-- Search queries retrieve nearest-neighbor excerpts using cosine similarity with zero external API latency.
+- Text chunks are indexed locally using semantic embeddings and BM25 keyword search, fused with Reciprocal Rank Fusion.
+- Hybrid search retrieves nearest-neighbor excerpts with high recall and precision.
 
-### 3. Sub-Second Structured Generation & Page Verification
-- Every artifact (Notes, Quizzes, Flashcards, Chat) is generated using Groq (`openai/gpt-oss-20b`) with strict JSON schema validation.
-- An automated post-processor inspects all citations, stripping any hallucinated or out-of-range page numbers.
+### 3. Structured Generation & Page Verification
+- Study artifacts (Notes, Quizzes, Flashcards, Chat) are generated using Groq (`llama-3.3-70b-versatile`) with strict JSON schema and Pydantic validation.
+- An automated post-processor inspects all citations, verifying claims against actual source pages.
 
-### 4. Zero-Container Edge Deployment
-- Deployed on **Cloudflare Pages** with **Edge Workers**.
-- Global edge routing with sub-50ms cold starts, handling static assets and API requests seamlessly.
+### 4. Production Deployment Architecture
+- **Frontend**: Static React + Vite application deployed to **Cloudflare Pages** for fast global CDN distribution.
+- **Backend**: FastAPI Python service running on container/VM infrastructure (Fly.io, Render, Railway, or VPS) with access to PyMuPDF and Groq LPUs.
+- Communication via `VITE_API_BASE_URL` with CORS configured via `FRONTEND_ORIGINS`.
 
 ---
 
@@ -113,7 +114,7 @@ cp .env.example .env
 Edit `backend/.env` and insert your Groq API Key:
 ```env
 GROQ_API_KEY=your_actual_groq_api_key_here
-GROQ_MODEL=openai/gpt-oss-20b
+GROQ_MODEL=llama-3.3-70b-versatile
 SESSION_TTL_SECONDS=3600
 MAX_UPLOAD_MB=20
 MAX_PDF_PAGES=500
@@ -140,47 +141,33 @@ Open your browser to `http://localhost:5173`. The Vite dev server will proxy `/a
 
 ## 🧪 Running Automated Tests
 
-Lumio includes comprehensive integration and workflow test suites verifying session isolation, PDF parsing, Groq structured output validation, and PDF export:
+Lumio includes comprehensive integration and workflow test suites:
 
 ```bash
 cd backend
-.\.venv\Scripts\python.exe -m pytest tests/ -v
-```
-
-All 10 test suites run against mock fixtures without requiring live network access:
-```
-tests/test_core.py::test_health_endpoint PASSED                          [ 10%]
-tests/test_core.py::test_missing_session_is_rejected PASSED              [ 20%]
-tests/test_core.py::test_session_document_ownership_blocks_cross_session_access PASSED [ 30%]
-tests/test_core.py::test_upload_does_not_expose_provider_errors_or_leave_temp_files PASSED [ 40%]
-tests/test_processing.py::test_clean_text_preserves_content_and_normalizes_layout PASSED [ 50%]
-tests/test_processing.py::test_sections_and_chunks_keep_local_page_references PASSED [ 60%]
-tests/test_processing.py::test_clean_pages_handles_empty_text PASSED     [ 70%]
-tests/test_workflow.py::test_real_pdf_workflows_isolation_generation_and_exports PASSED [ 80%]
-tests/test_workflow.py::test_invalid_pdf_is_rejected_and_temporary_file_is_removed PASSED [ 90%]
-tests/test_workflow.py::test_oversized_upload_is_rejected_before_pdf_parsing PASSED [100%]
+python -m pytest tests/ -v
 ```
 
 ---
 
-## ⚡ Deployment to Cloudflare
+## ⚡ Deployment
 
-Lumio is architected to deploy directly to **Cloudflare Pages** with zero manual server management.
+Lumio is architected for a production topology with separated concerns:
+- **Frontend**: Deployed to **Cloudflare Pages** for global edge CDN distribution of static assets.
+- **Backend**: Deployed to a container/VM platform (Render, Fly.io, Railway, or VPS) running FastAPI, PyMuPDF, and embedding/retrieval models.
 
-### Build and Deploy with Wrangler:
+### 1. Deploy Frontend to Cloudflare Pages:
 ```bash
-# 1. Build the production React bundle
 cd frontend
 npm run build
-
-# 2. Deploy static assets & Edge Workers to Cloudflare Pages
 npx wrangler pages deploy dist --project-name lumio-study
 ```
+Set environment variable `VITE_API_BASE_URL` in Cloudflare Pages dashboard to your backend URL (e.g., `https://api.lumio-study.com`).
 
-Your app is live immediately at:
-```
-https://lumio-study.pages.dev
-```
+### 2. Deploy Backend:
+Deploy the `backend/` directory using Docker or standard Python ASGI server (`uvicorn app.main:app --host 0.0.0.0 --port 8000`), configuring:
+- `GROQ_API_KEY`: Your Groq API key
+- `FRONTEND_ORIGINS`: `https://lumio-study.pages.dev` (or custom domain)
 
 ---
 
