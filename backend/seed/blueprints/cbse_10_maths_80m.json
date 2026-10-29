@@ -1,0 +1,72 @@
+{
+  "class_level": 10,
+  "subject": "Mathematics",
+  "syllabus_year": "2024-25",
+  "total_marks": 80,
+  "duration_min": 180,
+  "source_url": "https://cbseacademic.nic.in/sqp_classx_2024-25.html",
+  "spec": {
+    "sections": [
+      {
+        "section": "A",
+        "title": "Multiple Choice Questions",
+        "count": 20,
+        "marks_per_question": 1.0,
+        "total_marks": 20.0,
+        "question_types": ["mcq", "assertion_reason"],
+        "assertion_reason_count": 2,
+        "internal_choice_count": 0
+      },
+      {
+        "section": "B",
+        "title": "Very Short Answer Questions",
+        "count": 5,
+        "marks_per_question": 2.0,
+        "total_marks": 10.0,
+        "question_types": ["vsa"],
+        "internal_choice_count": 2
+      },
+      {
+        "section": "C",
+        "title": "Short Answer Questions",
+        "count": 6,
+        "marks_per_question": 3.0,
+        "total_marks": 18.0,
+        "question_types": ["sa"],
+        "internal_choice_count": 2
+      },
+      {
+        "section": "D",
+        "title": "Long Answer Questions",
+        "count": 4,
+        "marks_per_question": 5.0,
+        "total_marks": 20.0,
+        "question_types": ["la"],
+        "internal_choice_count": 2
+      },
+      {
+        "section": "E",
+        "title": "Case-based / Passage-based Integrated Questions",
+        "count": 3,
+        "marks_per_question": 4.0,
+        "total_marks": 12.0,
+        "question_types": ["case_based"],
+        "sub_parts": [
+          {"sub": "i", "marks": 1.0},
+          {"sub": "ii", "marks": 1.0},
+          {"sub": "iii", "marks": 2.0, "internal_choice": true}
+        ]
+      }
+    ],
+    "unit_weightage": [
+      {"unit": "Number Systems", "marks": 6},
+      {"unit": "Algebra", "marks": 20},
+      {"unit": "Coordinate Geometry", "marks": 6},
+      {"unit": "Geometry (Triangles & Circles)", "marks": 15},
+      {"unit": "Trigonometry", "marks": 12},
+      {"unit": "Mensuration", "marks": 10},
+      {"unit": "Statistics & Probability", "marks": 11}
+    ],
+    "competency_target_pct": 50
+  }
+}

@@ -1,0 +1,941 @@
+{
+  "total": 156,
+  "corpus": [
+    {
+      "id": "M001",
+      "category": "Calculus",
+      "latex": "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1",
+      "expected_rendered_snippet": "\\lim_{x \\to 0 \\frac{\\sin "
+    },
+    {
+      "id": "M002",
+      "category": "Calculus",
+      "latex": "\\frac{d}{dx}\\left(x^n\\right) = n x^{n-1}",
+      "expected_rendered_snippet": "\\frac{d{dx\\left(x^n\\right"
+    },
+    {
+      "id": "M003",
+      "category": "Calculus",
+      "latex": "\\frac{d}{dx}(\\sin x) = \\cos x",
+      "expected_rendered_snippet": "\\frac{d{dx(\\sin x) = \\cos"
+    },
+    {
+      "id": "M004",
+      "category": "Calculus",
+      "latex": "\\frac{d}{dx}(\\cos x) = -\\sin x",
+      "expected_rendered_snippet": "\\frac{d{dx(\\cos x) = -\\si"
+    },
+    {
+      "id": "M005",
+      "category": "Calculus",
+      "latex": "\\frac{d}{dx}(\\tan x) = \\sec^2 x",
+      "expected_rendered_snippet": "\\frac{d{dx(\\tan x) = \\sec"
+    },
+    {
+      "id": "M006",
+      "category": "Calculus",
+      "latex": "\\frac{d}{dx}(e^x) = e^x",
+      "expected_rendered_snippet": "\\frac{d{dx(e^x) = e^x"
+    },
+    {
+      "id": "M007",
+      "category": "Calculus",
+      "latex": "\\frac{d}{dx}(\\ln x) = \\frac{1}{x}",
+      "expected_rendered_snippet": "\\frac{d{dx(\\ln x) = \\frac"
+    },
+    {
+      "id": "M008",
+      "category": "Calculus",
+      "latex": "\\int x^n \\, dx = \\frac{x^{n+1}}{n+1} + C",
+      "expected_rendered_snippet": "\\int x^n \\, dx = \\frac{x^"
+    },
+    {
+      "id": "M009",
+      "category": "Calculus",
+      "latex": "\\int \\frac{1}{x} \\, dx = \\ln|x| + C",
+      "expected_rendered_snippet": "\\int \\frac{1{x \\, dx = \\l"
+    },
+    {
+      "id": "M010",
+      "category": "Calculus",
+      "latex": "\\int e^{ax} \\, dx = \\frac{1}{a}e^{ax} + C",
+      "expected_rendered_snippet": "\\int e^{ax \\, dx = \\frac{"
+    },
+    {
+      "id": "M011",
+      "category": "Calculus",
+      "latex": "\\int \\sin(ax) \\, dx = -\\frac{1}{a}\\cos(ax) + C",
+      "expected_rendered_snippet": "\\int \\sin(ax) \\, dx = -\\f"
+    },
+    {
+      "id": "M012",
+      "category": "Calculus",
+      "latex": "\\int \\cos(ax) \\, dx = \\frac{1}{a}\\sin(ax) + C",
+      "expected_rendered_snippet": "\\int \\cos(ax) \\, dx = \\fr"
+    },
+    {
+      "id": "M013",
+      "category": "Calculus",
+      "latex": "\\int \\sec^2 x \\, dx = \\tan x + C",
+      "expected_rendered_snippet": "\\int \\sec^2 x \\, dx = \\ta"
+    },
+    {
+      "id": "M014",
+      "category": "Calculus",
+      "latex": "\\int \\frac{dx}{x^2 + a^2} = \\frac{1}{a}\\tan^{-1}\\left(\\frac{x}{a}\\right) + C",
+      "expected_rendered_snippet": "\\int \\frac{dx{x^2 + a^2 ="
+    },
+    {
+      "id": "M015",
+      "category": "Calculus",
+      "latex": "\\int \\frac{dx}{\\sqrt{a^2 - x^2}} = \\sin^{-1}\\left(\\frac{x}{a}\\right) + C",
+      "expected_rendered_snippet": "\\int \\frac{dx{\\sqrt{a^2 -"
+    },
+    {
+      "id": "M016",
+      "category": "Calculus",
+      "latex": "\\int u \\frac{dv}{dx} \\, dx = uv - \\int v \\frac{du}{dx} \\, dx",
+      "expected_rendered_snippet": "\\int u \\frac{dv{dx \\, dx "
+    },
+    {
+      "id": "M017",
+      "category": "Calculus",
+      "latex": "\\int_0^a f(x) \\, dx = \\int_0^a f(a-x) \\, dx",
+      "expected_rendered_snippet": "\\int_0^a f(x) \\, dx = \\in"
+    },
+    {
+      "id": "M018",
+      "category": "Calculus",
+      "latex": "\\int_{-a}^a f(x) \\, dx = 2\\int_0^a f(x) \\, dx \\quad \\text{if } f(-x) = f(x)",
+      "expected_rendered_snippet": "\\int_{-a^a f(x) \\, dx = 2"
+    },
+    {
+      "id": "M019",
+      "category": "Calculus",
+      "latex": "\\frac{dy}{dx} + P(x)y = Q(x)",
+      "expected_rendered_snippet": "\\frac{dy{dx + P(x)y = Q(x"
+    },
+    {
+      "id": "M020",
+      "category": "Calculus",
+      "latex": "I.F. = e^{\\int P(x) \\, dx}",
+      "expected_rendered_snippet": "I.F. = e^{\\int P(x) \\, dx"
+    },
+    {
+      "id": "M021",
+      "category": "Calculus",
+      "latex": "y \\cdot e^{\\int P \\, dx} = \\int \\left(Q \\cdot e^{\\int P \\, dx}\\right) dx + C",
+      "expected_rendered_snippet": "y \\cdot e^{\\int P \\, dx ="
+    },
+    {
+      "id": "M022",
+      "category": "Calculus",
+      "latex": "\\frac{d^2 y}{dx^2} + \\omega^2 y = 0",
+      "expected_rendered_snippet": "\\frac{d^2 y{dx^2 + \\omega"
+    },
+    {
+      "id": "M023",
+      "category": "Calculus",
+      "latex": "f(x_0) > 0 \\implies \text{local minimum}",
+      "expected_rendered_snippet": "f(x_0) > 0 \\implies \text{"
+    },
+    {
+      "id": "M024",
+      "category": "Calculus",
+      "latex": "f(x_0) < 0 \\implies \text{local maximum}",
+      "expected_rendered_snippet": "f(x_0) < 0 \\implies \text{"
+    },
+    {
+      "id": "M025",
+      "category": "Calculus",
+      "latex": "\\int_a^b f(x) \\, dx = F(b) - F(a)",
+      "expected_rendered_snippet": "\\int_a^b f(x) \\, dx = F(b"
+    },
+    {
+      "id": "M026",
+      "category": "Matrices & Determinants",
+      "latex": "A = \\begin{pmatrix} a_{11} & a_{12} \\\\ a_{21} & a_{22} \\end{pmatrix}",
+      "expected_rendered_snippet": "A = \\begin{pmatrix a_{11 "
+    },
+    {
+      "id": "M027",
+      "category": "Matrices & Determinants",
+      "latex": "\\det(A) = a_{11}a_{22} - a_{12}a_{21}",
+      "expected_rendered_snippet": "\\det(A) = a_{11a_{22 - a_"
+    },
+    {
+      "id": "M028",
+      "category": "Matrices & Determinants",
+      "latex": "A^{-1} = \\frac{1}{\\det(A)} \\operatorname{adj}(A)",
+      "expected_rendered_snippet": "A^{-1 = \\frac{1{\\det(A) \\"
+    },
+    {
+      "id": "M029",
+      "category": "Matrices & Determinants",
+      "latex": "A \\cdot A^{-1} = I",
+      "expected_rendered_snippet": "A \\cdot A^{-1 = I"
+    },
+    {
+      "id": "M030",
+      "category": "Matrices & Determinants",
+      "latex": "(AB)^T = B^T A^T",
+      "expected_rendered_snippet": "(AB)^T = B^T A^T"
+    },
+    {
+      "id": "M031",
+      "category": "Matrices & Determinants",
+      "latex": "(AB)^{-1} = B^{-1} A^{-1}",
+      "expected_rendered_snippet": "(AB)^{-1 = B^{-1 A^{-1"
+    },
+    {
+      "id": "M032",
+      "category": "Matrices & Determinants",
+      "latex": "\\begin{vmatrix} 1 & a & a^2 \\\\ 1 & b & b^2 \\\\ 1 & c & c^2 \\end{vmatrix} = (a-b)(b-c)(c-a)",
+      "expected_rendered_snippet": "\\begin{vmatrix 1 & a & a^"
+    },
+    {
+      "id": "M033",
+      "category": "Matrices & Determinants",
+      "latex": "\\operatorname{Tr}(A) = \\sum_{i=1}^n a_{ii}",
+      "expected_rendered_snippet": "\\operatorname{Tr(A) = \\su"
+    },
+    {
+      "id": "M034",
+      "category": "Matrices & Determinants",
+      "latex": "AX = B \\implies X = A^{-1}B",
+      "expected_rendered_snippet": "AX = B \\implies X = A^{-1"
+    },
+    {
+      "id": "M035",
+      "category": "Matrices & Determinants",
+      "latex": "\\det(kA) = k^n \\det(A)",
+      "expected_rendered_snippet": "\\det(kA) = k^n \\det(A)"
+    },
+    {
+      "id": "M036",
+      "category": "Matrices & Determinants",
+      "latex": "\\det(A^T) = \\det(A)",
+      "expected_rendered_snippet": "\\det(A^T) = \\det(A)"
+    },
+    {
+      "id": "M037",
+      "category": "Matrices & Determinants",
+      "latex": "A + B = B + A",
+      "expected_rendered_snippet": "A + B = B + A"
+    },
+    {
+      "id": "M038",
+      "category": "Matrices & Determinants",
+      "latex": "A(BC) = (AB)C",
+      "expected_rendered_snippet": "A(BC) = (AB)C"
+    },
+    {
+      "id": "M039",
+      "category": "Matrices & Determinants",
+      "latex": "\\lambda \\in \\mathbb{R} : \\det(A - \\lambda I) = 0",
+      "expected_rendered_snippet": "\\lambda \\in \\mathbb{R : \\"
+    },
+    {
+      "id": "M040",
+      "category": "Matrices & Determinants",
+      "latex": "\\operatorname{adj}(AB) = \\operatorname{adj}(B)\\operatorname{adj}(A)",
+      "expected_rendered_snippet": "\\operatorname{adj(AB) = \\"
+    },
+    {
+      "id": "M041",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\vec{a} \\cdot \\vec{b} = |\\vec{a}| |\\vec{b}| \\cos \\theta",
+      "expected_rendered_snippet": "\\vec{a \\cdot \\vec{b = |\\v"
+    },
+    {
+      "id": "M042",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\vec{a} \\times \\vec{b} = |\\vec{a}| |\\vec{b}| \\sin \\theta \\, \\hat{n}",
+      "expected_rendered_snippet": "\\vec{a \\times \\vec{b = |\\"
+    },
+    {
+      "id": "M043",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\cos \\theta = \\frac{\\vec{a} \\cdot \\vec{b}}{|\\vec{a}| |\\vec{b}|}",
+      "expected_rendered_snippet": "\\cos \\theta = \\frac{\\vec{"
+    },
+    {
+      "id": "M044",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\vec{r} = \\vec{a} + \\lambda \\vec{b}",
+      "expected_rendered_snippet": "\\vec{r = \\vec{a + \\lambda"
+    },
+    {
+      "id": "M045",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\frac{x - x_1}{a} = \\frac{y - y_1}{b} = \\frac{z - z_1}{c}",
+      "expected_rendered_snippet": "\\frac{x - x_1{a = \\frac{y"
+    },
+    {
+      "id": "M046",
+      "category": "Vectors & 3D Geometry",
+      "latex": "d = \\frac{|(\\vec{a}_2 - \\vec{a}_1) \\cdot (\\vec{b}_1 \\times \\vec{b}_2)|}{|\\vec{b}_1 \\times \\vec{b}_2|}",
+      "expected_rendered_snippet": "d = \\frac{|(\\vec{a_2 - \\v"
+    },
+    {
+      "id": "M047",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\vec{r} \\cdot \\hat{n} = d",
+      "expected_rendered_snippet": "\\vec{r \\cdot \\hat{n = d"
+    },
+    {
+      "id": "M048",
+      "category": "Vectors & 3D Geometry",
+      "latex": "A x + B y + C z + D = 0",
+      "expected_rendered_snippet": "A x + B y + C z + D = 0"
+    },
+    {
+      "id": "M049",
+      "category": "Vectors & 3D Geometry",
+      "latex": "l^2 + m^2 + n^2 = 1",
+      "expected_rendered_snippet": "l^2 + m^2 + n^2 = 1"
+    },
+    {
+      "id": "M050",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\cos^2 \\alpha + \\cos^2 \\beta + \\cos^2 \\gamma = 1",
+      "expected_rendered_snippet": "\\cos^2 \\alpha + \\cos^2 \\b"
+    },
+    {
+      "id": "M051",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\vec{a} \\times (\\vec{b} \\times \\vec{c}) = (\\vec{a} \\cdot \\vec{c})\\vec{b} - (\\vec{a} \\cdot \\vec{b})\\vec{c}",
+      "expected_rendered_snippet": "\\vec{a \\times (\\vec{b \\ti"
+    },
+    {
+      "id": "M052",
+      "category": "Vectors & 3D Geometry",
+      "latex": "[\\vec{a} \\, \\vec{b} \\, \\vec{c}] = \\vec{a} \\cdot (\\vec{b} \\times \\vec{c})",
+      "expected_rendered_snippet": "[\\vec{a \\, \\vec{b \\, \\vec"
+    },
+    {
+      "id": "M053",
+      "category": "Vectors & 3D Geometry",
+      "latex": "|\\vec{a} \\times \\vec{b}|^2 + (\\vec{a} \\cdot \\vec{b})^2 = |\\vec{a}|^2 |\\vec{b}|^2",
+      "expected_rendered_snippet": "|\\vec{a \\times \\vec{b|^2 "
+    },
+    {
+      "id": "M054",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\hat{a} = \\frac{\\vec{a}}{|\\vec{a}|}",
+      "expected_rendered_snippet": "\\hat{a = \\frac{\\vec{a{|\\v"
+    },
+    {
+      "id": "M055",
+      "category": "Vectors & 3D Geometry",
+      "latex": "\\operatorname{proj}_{\\vec{b}} \\vec{a} = \\frac{\\vec{a} \\cdot \\vec{b}}{|\\vec{b}|}",
+      "expected_rendered_snippet": "\\operatorname{proj_{\\vec{"
+    },
+    {
+      "id": "M056",
+      "category": "Physics (Electro & Modern)",
+      "latex": "F = \\frac{1}{4\\pi\\varepsilon_0} \\frac{q_1 q_2}{r^2}",
+      "expected_rendered_snippet": "F = \\frac{1{4\\pi\\varepsil"
+    },
+    {
+      "id": "M057",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\vec{E} = \\frac{\\vec{F}}{q_0}",
+      "expected_rendered_snippet": "\\vec{E = \\frac{\\vec{F{q_0"
+    },
+    {
+      "id": "M058",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\Phi_E = \\oint \\vec{E} \\cdot d\\vec{A} = \\frac{q_{\\text{enclosed}}}{\\varepsilon_0}",
+      "expected_rendered_snippet": "\\Phi_E = \\oint \\vec{E \\cd"
+    },
+    {
+      "id": "M059",
+      "category": "Physics (Electro & Modern)",
+      "latex": "V = \\frac{1}{4\\pi\\varepsilon_0} \\frac{q}{r}",
+      "expected_rendered_snippet": "V = \\frac{1{4\\pi\\varepsil"
+    },
+    {
+      "id": "M060",
+      "category": "Physics (Electro & Modern)",
+      "latex": "C = \\frac{\\varepsilon_0 A}{d}",
+      "expected_rendered_snippet": "C = \\frac{\\varepsilon_0 A"
+    },
+    {
+      "id": "M061",
+      "category": "Physics (Electro & Modern)",
+      "latex": "U = \\frac{1}{2} C V^2 = \\frac{Q^2}{2C}",
+      "expected_rendered_snippet": "U = \\frac{1{2 C V^2 = \\fr"
+    },
+    {
+      "id": "M062",
+      "category": "Physics (Electro & Modern)",
+      "latex": "I = \\frac{dQ}{dt} = n e A v_d",
+      "expected_rendered_snippet": "I = \\frac{dQ{dt = n e A v"
+    },
+    {
+      "id": "M063",
+      "category": "Physics (Electro & Modern)",
+      "latex": "V = I R",
+      "expected_rendered_snippet": "V = I R"
+    },
+    {
+      "id": "M064",
+      "category": "Physics (Electro & Modern)",
+      "latex": "R = \\rho \\frac{l}{A}",
+      "expected_rendered_snippet": "R = \\rho \\frac{l{A"
+    },
+    {
+      "id": "M065",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\vec{B} = \\frac{\\mu_0}{4\\pi} \\frac{I (d\\vec{l} \\times \\hat{r})}{r^2}",
+      "expected_rendered_snippet": "\\vec{B = \\frac{\\mu_0{4\\pi"
+    },
+    {
+      "id": "M066",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\oint \\vec{B} \\cdot d\\vec{l} = \\mu_0 I_{\\text{enclosed}}",
+      "expected_rendered_snippet": "\\oint \\vec{B \\cdot d\\vec{"
+    },
+    {
+      "id": "M067",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\vec{F} = q(\\vec{E} + \\vec{v} \\times \\vec{B})",
+      "expected_rendered_snippet": "\\vec{F = q(\\vec{E + \\vec{"
+    },
+    {
+      "id": "M068",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\mathcal{E} = -\\frac{d\\Phi_B}{dt}",
+      "expected_rendered_snippet": "\\mathcal{E = -\\frac{d\\Phi"
+    },
+    {
+      "id": "M069",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\mathcal{E} = B l v",
+      "expected_rendered_snippet": "\\mathcal{E = B l v"
+    },
+    {
+      "id": "M070",
+      "category": "Physics (Electro & Modern)",
+      "latex": "L = \\frac{\\mu_0 N^2 A}{l}",
+      "expected_rendered_snippet": "L = \\frac{\\mu_0 N^2 A{l"
+    },
+    {
+      "id": "M071",
+      "category": "Physics (Electro & Modern)",
+      "latex": "X_L = \\omega L = 2\\pi f L",
+      "expected_rendered_snippet": "X_L = \\omega L = 2\\pi f L"
+    },
+    {
+      "id": "M072",
+      "category": "Physics (Electro & Modern)",
+      "latex": "X_C = \\frac{1}{\\omega C} = \\frac{1}{2\\pi f C}",
+      "expected_rendered_snippet": "X_C = \\frac{1{\\omega C = "
+    },
+    {
+      "id": "M073",
+      "category": "Physics (Electro & Modern)",
+      "latex": "Z = \\sqrt{R^2 + (X_L - X_C)^2}",
+      "expected_rendered_snippet": "Z = \\sqrt{R^2 + (X_L - X_"
+    },
+    {
+      "id": "M074",
+      "category": "Physics (Electro & Modern)",
+      "latex": "f_r = \\frac{1}{2\\pi \\sqrt{LC}}",
+      "expected_rendered_snippet": "f_r = \\frac{1{2\\pi \\sqrt{"
+    },
+    {
+      "id": "M075",
+      "category": "Physics (Electro & Modern)",
+      "latex": "c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}",
+      "expected_rendered_snippet": "c = \\frac{1{\\sqrt{\\mu_0 \\"
+    },
+    {
+      "id": "M076",
+      "category": "Physics (Electro & Modern)",
+      "latex": "n = \\frac{c}{v} = \\frac{\\sin i}{\\sin r}",
+      "expected_rendered_snippet": "n = \\frac{c{v = \\frac{\\si"
+    },
+    {
+      "id": "M077",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\frac{1}{f} = \\frac{1}{v} - \\frac{1}{u}",
+      "expected_rendered_snippet": "\\frac{1{f = \\frac{1{v - \\"
+    },
+    {
+      "id": "M078",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\frac{1}{f} = (n - 1)\\left(\\frac{1}{R_1} - \\frac{1}{R_2}\\right)",
+      "expected_rendered_snippet": "\\frac{1{f = (n - 1)\\left("
+    },
+    {
+      "id": "M079",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\beta = \\frac{\\lambda D}{d}",
+      "expected_rendered_snippet": "\\beta = \\frac{\\lambda D{d"
+    },
+    {
+      "id": "M080",
+      "category": "Physics (Electro & Modern)",
+      "latex": "E = h \\nu = \\frac{h c}{\\lambda}",
+      "expected_rendered_snippet": "E = h \\nu = \\frac{h c{\\la"
+    },
+    {
+      "id": "M081",
+      "category": "Physics (Electro & Modern)",
+      "latex": "K_{\\max} = h\\nu - \\Phi_0 = e V_0",
+      "expected_rendered_snippet": "K_{\\max = h\\nu - \\Phi_0 ="
+    },
+    {
+      "id": "M082",
+      "category": "Physics (Electro & Modern)",
+      "latex": "\\lambda = \\frac{h}{p} = \\frac{h}{m v}",
+      "expected_rendered_snippet": "\\lambda = \\frac{h{p = \\fr"
+    },
+    {
+      "id": "M083",
+      "category": "Physics (Electro & Modern)",
+      "latex": "r_n = \\frac{n^2 h^2 \\varepsilon_0}{\\pi m e^2} = n^2 a_0",
+      "expected_rendered_snippet": "r_n = \\frac{n^2 h^2 \\vare"
+    },
+    {
+      "id": "M084",
+      "category": "Physics (Electro & Modern)",
+      "latex": "E_n = -\\frac{13.6}{n^2} \\, \\mathrm{eV}",
+      "expected_rendered_snippet": "E_n = -\\frac{13.6{n^2 \\, "
+    },
+    {
+      "id": "M085",
+      "category": "Physics (Electro & Modern)",
+      "latex": "N(t) = N_0 e^{-\\lambda t}",
+      "expected_rendered_snippet": "N(t) = N_0 e^{-\\lambda t"
+    },
+    {
+      "id": "M086",
+      "category": "Physics (Electro & Modern)",
+      "latex": "T_{1/2} = \\frac{\\ln 2}{\\lambda} \\approx \\frac{0.693}{\\lambda}",
+      "expected_rendered_snippet": "T_{1/2 = \\frac{\\ln 2{\\lam"
+    },
+    {
+      "id": "M087",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{2H2 + O2 -> 2H2O}",
+      "expected_rendered_snippet": "2H2 + O2 -> 2H2O"
+    },
+    {
+      "id": "M088",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{N2 + 3H2 <=> 2NH3}",
+      "expected_rendered_snippet": "N2 + 3H2 <=> 2NH3"
+    },
+    {
+      "id": "M089",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{CaCO3 ->[ \\Delta ] CaO + CO2 ^}",
+      "expected_rendered_snippet": "CaCO3 ->[ \\Delta ] CaO + "
+    },
+    {
+      "id": "M090",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{2KClO3 ->[ MnO2 ][ \\Delta ] 2KCl + 3O2 ^}",
+      "expected_rendered_snippet": "2KClO3 ->[ MnO2 ][ \\Delta"
+    },
+    {
+      "id": "M091",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Zn + H2SO4 -> ZnSO4 + H2 ^}",
+      "expected_rendered_snippet": "Zn + H2SO4 -> ZnSO4 + H2 "
+    },
+    {
+      "id": "M092",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Fe + CuSO4 -> FeSO4 + Cu}",
+      "expected_rendered_snippet": "Fe + CuSO4 -> FeSO4 + Cu"
+    },
+    {
+      "id": "M093",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{AgNO3 + NaCl -> AgCl v + NaNO3}",
+      "expected_rendered_snippet": "AgNO3 + NaCl -> AgCl v + "
+    },
+    {
+      "id": "M094",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{2Mg + O2 -> 2MgO}",
+      "expected_rendered_snippet": "2Mg + O2 -> 2MgO"
+    },
+    {
+      "id": "M095",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{CH4 + 2O2 -> CO2 + 2H2O}",
+      "expected_rendered_snippet": "CH4 + 2O2 -> CO2 + 2H2O"
+    },
+    {
+      "id": "M096",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{C6H12O6 + 6O2 -> 6CO2 + 6H2O}",
+      "expected_rendered_snippet": "C6H12O6 + 6O2 -> 6CO2 + 6"
+    },
+    {
+      "id": "M097",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{NaCl + H2O -> NaOH + HCl}",
+      "expected_rendered_snippet": "NaCl + H2O -> NaOH + HCl"
+    },
+    {
+      "id": "M098",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{2Al + 3Cl2 -> 2AlCl3}",
+      "expected_rendered_snippet": "2Al + 3Cl2 -> 2AlCl3"
+    },
+    {
+      "id": "M099",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{P4 + 5O2 -> P4O10}",
+      "expected_rendered_snippet": "P4 + 5O2 -> P4O10"
+    },
+    {
+      "id": "M100",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{SO2 + 1/2 O2 <=> SO3}",
+      "expected_rendered_snippet": "SO2 + 1/2 O2 <=> SO3"
+    },
+    {
+      "id": "M101",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{2Fe^{3+} + Sn^{2+} -> 2Fe^{2+} + Sn^{4+}}",
+      "expected_rendered_snippet": "2Fe^{3+ + Sn^{2+ -> 2Fe^{"
+    },
+    {
+      "id": "M102",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{MnO4^- + 8H^+ + 5e^- -> Mn^{2+} + 4H2O}",
+      "expected_rendered_snippet": "MnO4^- + 8H^+ + 5e^- -> M"
+    },
+    {
+      "id": "M103",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Cr2O7^{2-} + 14H^+ + 6e^- -> 2Cr^{3+} + 7H2O}",
+      "expected_rendered_snippet": "Cr2O7^{2- + 14H^+ + 6e^- "
+    },
+    {
+      "id": "M104",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{H2SO4 -> H^+ + HSO4^-}",
+      "expected_rendered_snippet": "H2SO4 -> H^+ + HSO4^-"
+    },
+    {
+      "id": "M105",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{NH3 + H2O <=> NH4^+ + OH^-}",
+      "expected_rendered_snippet": "NH3 + H2O <=> NH4^+ + OH^"
+    },
+    {
+      "id": "M106",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{CH3COOH <=> CH3COO^- + H^+}",
+      "expected_rendered_snippet": "CH3COOH <=> CH3COO^- + H^"
+    },
+    {
+      "id": "M107",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Cu^{2+} + 4NH3 -> [Cu(NH3)4]^{2+}}",
+      "expected_rendered_snippet": "Cu^{2+ + 4NH3 -> [Cu(NH3)"
+    },
+    {
+      "id": "M108",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Fe^{3+} + SCN^- -> [Fe(SCN)]^{2+}}",
+      "expected_rendered_snippet": "Fe^{3+ + SCN^- -> [Fe(SCN"
+    },
+    {
+      "id": "M109",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{2Na + 2H2O -> 2NaOH + H2 ^}",
+      "expected_rendered_snippet": "2Na + 2H2O -> 2NaOH + H2 "
+    },
+    {
+      "id": "M110",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Cl2 + 2KI -> 2KCl + I2}",
+      "expected_rendered_snippet": "Cl2 + 2KI -> 2KCl + I2"
+    },
+    {
+      "id": "M111",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Pb(NO3)2 + 2KI -> PbI2 v + 2KNO3}",
+      "expected_rendered_snippet": "Pb(NO3)2 + 2KI -> PbI2 v "
+    },
+    {
+      "id": "M112",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{BaCl2 + Na2SO4 -> BaSO4 v + 2NaCl}",
+      "expected_rendered_snippet": "BaCl2 + Na2SO4 -> BaSO4 v"
+    },
+    {
+      "id": "M113",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{CO2 + H2O <=> H2CO3}",
+      "expected_rendered_snippet": "CO2 + H2O <=> H2CO3"
+    },
+    {
+      "id": "M114",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{CaO + H2O -> Ca(OH)2}",
+      "expected_rendered_snippet": "CaO + H2O -> Ca(OH)2"
+    },
+    {
+      "id": "M115",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{Cu + 4HNO3 -> Cu(NO3)2 + 2NO2 + 2H2O}",
+      "expected_rendered_snippet": "Cu + 4HNO3 -> Cu(NO3)2 + "
+    },
+    {
+      "id": "M116",
+      "category": "Inorganic Chemistry",
+      "latex": "\\ce{4NH3 + 5O2 ->[ Pt ] 4NO + 6H2O}",
+      "expected_rendered_snippet": "4NH3 + 5O2 ->[ Pt ] 4NO +"
+    },
+    {
+      "id": "M117",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH3CH2OH ->[ \\text{conc. } H2SO4 ][ 443\\,\\mathrm{K} ] CH2=CH2 + H2O}",
+      "expected_rendered_snippet": "CH3CH2OH ->[ \\text{conc. "
+    },
+    {
+      "id": "M118",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH3Br + NaOH -> CH3OH + NaBr}",
+      "expected_rendered_snippet": "CH3Br + NaOH -> CH3OH + N"
+    },
+    {
+      "id": "M119",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH3CHO + 2[Ag(NH3)2]^+ + 3OH^- -> CH3COO^- + 2Ag v + 4NH3 + 2H2O}",
+      "expected_rendered_snippet": "CH3CHO + 2[Ag(NH3)2]^+ + "
+    },
+    {
+      "id": "M120",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{R-COOH + R^{\\prime}-OH <=>[\\text{H}^+] R-COO-R^{\\prime} + H2O}",
+      "expected_rendered_snippet": "R-COOH + R\\'-OH <=>[\\text"
+    },
+    {
+      "id": "M121",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H6 + HNO3 ->[\\text{H2SO4}] C6H5NO2 + H2O}",
+      "expected_rendered_snippet": "C6H6 + HNO3 ->[\\text{H2SO"
+    },
+    {
+      "id": "M122",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H5NH2 + NaNO2 + 2HCl ->[ 273-278\\,\\mathrm{K} ] C6H5N2^+ Cl^- + NaCl + 2H2O}",
+      "expected_rendered_snippet": "C6H5NH2 + NaNO2 + 2HCl ->"
+    },
+    {
+      "id": "M123",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH3COCH3 + I2 + NaOH -> CHI3 v + CH3COONa}",
+      "expected_rendered_snippet": "CH3COCH3 + I2 + NaOH -> C"
+    },
+    {
+      "id": "M124",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{R-CN + 2H2 ->[ Ni ] R-CH2NH2}",
+      "expected_rendered_snippet": "R-CN + 2H2 ->[ Ni ] R-CH2"
+    },
+    {
+      "id": "M125",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{R-CONH2 + Br2 + 4KOH -> R-NH2 + K2CO3 + 2KBr + 2H2O}",
+      "expected_rendered_snippet": "R-CONH2 + Br2 + 4KOH -> R"
+    },
+    {
+      "id": "M126",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH3Cl + 2Na + CH3Cl ->[\\text{dry ether}] CH3-CH3 + 2NaCl}",
+      "expected_rendered_snippet": "CH3Cl + 2Na + CH3Cl ->[\\t"
+    },
+    {
+      "id": "M127",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H5Cl + 2Na + C6H5Cl ->[\\text{ether}] C6H5-C6H5 + 2NaCl}",
+      "expected_rendered_snippet": "C6H5Cl + 2Na + C6H5Cl ->["
+    },
+    {
+      "id": "M128",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{R-X + Mg ->[\\text{dry ether}] R-MgX}",
+      "expected_rendered_snippet": "R-X + Mg ->[\\text{dry eth"
+    },
+    {
+      "id": "M129",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{R-MgX + H2O -> R-H + Mg(OH)X}",
+      "expected_rendered_snippet": "R-MgX + H2O -> R-H + Mg(O"
+    },
+    {
+      "id": "M130",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH2=CH2 + H2O ->[\\text{H}^+] CH3CH2OH}",
+      "expected_rendered_snippet": "CH2=CH2 + H2O ->[\\text{H^"
+    },
+    {
+      "id": "M131",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{CH3COOH + PCl5 -> CH3COCl + POCl3 + HCl}",
+      "expected_rendered_snippet": "CH3COOH + PCl5 -> CH3COCl"
+    },
+    {
+      "id": "M132",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H5OH + 3Br2 -> C6H2Br3OH v + 3HBr}",
+      "expected_rendered_snippet": "C6H5OH + 3Br2 -> C6H2Br3O"
+    },
+    {
+      "id": "M133",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H5OH + NaOH -> C6H5ONa + H2O}",
+      "expected_rendered_snippet": "C6H5OH + NaOH -> C6H5ONa "
+    },
+    {
+      "id": "M134",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H5ONa + CO2 ->[ 400\\,\\mathrm{K} ][ 4-7\\,\\mathrm{atm} ] C6H4(OH)COONa}",
+      "expected_rendered_snippet": "C6H5ONa + CO2 ->[ 400\\,\\m"
+    },
+    {
+      "id": "M135",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{C6H5CHO + HCN -> C6H5CH(OH)CN}",
+      "expected_rendered_snippet": "C6H5CHO + HCN -> C6H5CH(O"
+    },
+    {
+      "id": "M136",
+      "category": "Organic Chemistry Reactions",
+      "latex": "\\ce{2HCHO + NaOH -> HCOONa + CH3OH}",
+      "expected_rendered_snippet": "2HCHO + NaOH -> HCOONa + "
+    },
+    {
+      "id": "M137",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Delta G = \\Delta H - T\\Delta S",
+      "expected_rendered_snippet": "\\Delta G = \\Delta H - T\\D"
+    },
+    {
+      "id": "M138",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Delta G^\\circ = -RT \\ln K",
+      "expected_rendered_snippet": "\\Delta G^\\circ = -RT \\ln "
+    },
+    {
+      "id": "M139",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "E_{\\text{cell}} = E^\\circ_{\\text{cell}} - \\frac{RT}{nF} \\ln Q",
+      "expected_rendered_snippet": "E_{\\text{cell = E^\\circ_{"
+    },
+    {
+      "id": "M140",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "E^\\circ_{\\text{cell}} = \\frac{0.0591}{n} \\log_{10} K_c \\quad \\text{at } 298\\,\\mathrm{K}",
+      "expected_rendered_snippet": "E^\\circ_{\\text{cell = \\fr"
+    },
+    {
+      "id": "M141",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Lambda_m = \\frac{\\kappa \\times 1000}{C}",
+      "expected_rendered_snippet": "\\Lambda_m = \\frac{\\kappa "
+    },
+    {
+      "id": "M142",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Lambda_m^\\circ = \\nu_+ \\lambda_+^\\circ + \\nu_- \\lambda_-^\\circ",
+      "expected_rendered_snippet": "\\Lambda_m^\\circ = \\nu_+ \\"
+    },
+    {
+      "id": "M143",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "k = A e^{-\\frac{E_a}{RT}}",
+      "expected_rendered_snippet": "k = A e^{-\\frac{E_a{RT"
+    },
+    {
+      "id": "M144",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\ln k = \\ln A - \\frac{E_a}{RT}",
+      "expected_rendered_snippet": "\\ln k = \\ln A - \\frac{E_a"
+    },
+    {
+      "id": "M145",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "t_{1/2} = \\frac{0.693}{k} \\quad (\\text{first order})",
+      "expected_rendered_snippet": "t_{1/2 = \\frac{0.693{k \\q"
+    },
+    {
+      "id": "M146",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "r = k[A]^x [B]^y",
+      "expected_rendered_snippet": "r = k[A]^x [B]^y"
+    },
+    {
+      "id": "M147",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "P_A = P_A^\\circ x_A",
+      "expected_rendered_snippet": "P_A = P_A^\\circ x_A"
+    },
+    {
+      "id": "M148",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\frac{P^\\circ - P}{P^\\circ} = \\frac{n_2}{n_1 + n_2} \\approx \\frac{w_2 M_1}{M_2 w_1}",
+      "expected_rendered_snippet": "\\frac{P^\\circ - P{P^\\circ"
+    },
+    {
+      "id": "M149",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Delta T_b = K_b \\cdot m = K_b \\frac{w_2 \\times 1000}{M_2 w_1}",
+      "expected_rendered_snippet": "\\Delta T_b = K_b \\cdot m "
+    },
+    {
+      "id": "M150",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Delta T_f = K_f \\cdot m = K_f \\frac{w_2 \\times 1000}{M_2 w_1}",
+      "expected_rendered_snippet": "\\Delta T_f = K_f \\cdot m "
+    },
+    {
+      "id": "M151",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\Pi = C R T = \\frac{n}{V} R T",
+      "expected_rendered_snippet": "\\Pi = C R T = \\frac{n{V R"
+    },
+    {
+      "id": "M152",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "i = 1 + (n - 1)\\alpha",
+      "expected_rendered_snippet": "i = 1 + (n - 1)\\alpha"
+    },
+    {
+      "id": "M153",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\mathrm{pH} = -\\log_{10}[\\mathrm{H}^+]",
+      "expected_rendered_snippet": "\\mathrm{pH = -\\log_{10[\\m"
+    },
+    {
+      "id": "M154",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\mathrm{pOH} = -\\log_{10}[\\mathrm{OH}^-]",
+      "expected_rendered_snippet": "\\mathrm{pOH = -\\log_{10[\\"
+    },
+    {
+      "id": "M155",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\mathrm{pH} + \\mathrm{pOH} = 14 \\quad \\text{at } 298\\,\\mathrm{K}",
+      "expected_rendered_snippet": "\\mathrm{pH + \\mathrm{pOH "
+    },
+    {
+      "id": "M156",
+      "category": "Physical Chemistry & Thermodynamics",
+      "latex": "\\mathrm{pH} = \\mathrm{p}K_a + \\log_{10}\\left(\\frac{[\\text{Conjugate Base}]}{[\\text{Acid}]}\\right)",
+      "expected_rendered_snippet": "\\mathrm{pH = \\mathrm{pK_a"
+    }
+  ]
+}

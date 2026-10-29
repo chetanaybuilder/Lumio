@@ -1,0 +1,71 @@
+{
+  "class_level": 12,
+  "subject": "Mathematics",
+  "syllabus_year": "2024-25",
+  "total_marks": 80,
+  "duration_min": 180,
+  "source_url": "https://cbseacademic.nic.in/sqp_classxii_2024-25.html",
+  "spec": {
+    "sections": [
+      {
+        "section": "A",
+        "title": "Multiple Choice Questions",
+        "count": 20,
+        "marks_per_question": 1.0,
+        "total_marks": 20.0,
+        "question_types": ["mcq", "assertion_reason"],
+        "assertion_reason_count": 2,
+        "internal_choice_count": 0
+      },
+      {
+        "section": "B",
+        "title": "Very Short Answer Questions",
+        "count": 5,
+        "marks_per_question": 2.0,
+        "total_marks": 10.0,
+        "question_types": ["vsa"],
+        "internal_choice_count": 2
+      },
+      {
+        "section": "C",
+        "title": "Short Answer Questions",
+        "count": 6,
+        "marks_per_question": 3.0,
+        "total_marks": 18.0,
+        "question_types": ["sa"],
+        "internal_choice_count": 2
+      },
+      {
+        "section": "D",
+        "title": "Long Answer Questions",
+        "count": 4,
+        "marks_per_question": 5.0,
+        "total_marks": 20.0,
+        "question_types": ["la"],
+        "internal_choice_count": 2
+      },
+      {
+        "section": "E",
+        "title": "Case-based / Passage-based Integrated Questions",
+        "count": 3,
+        "marks_per_question": 4.0,
+        "total_marks": 12.0,
+        "question_types": ["case_based"],
+        "sub_parts": [
+          {"sub": "i", "marks": 1.0},
+          {"sub": "ii", "marks": 1.0},
+          {"sub": "iii", "marks": 2.0, "internal_choice": true}
+        ]
+      }
+    ],
+    "unit_weightage": [
+      {"unit": "Relations and Functions", "marks": 8},
+      {"unit": "Algebra (Matrices & Determinants)", "marks": 10},
+      {"unit": "Calculus", "marks": 35},
+      {"unit": "Vectors and Three-Dimensional Geometry", "marks": 14},
+      {"unit": "Linear Programming", "marks": 5},
+      {"unit": "Probability", "marks": 8}
+    ],
+    "competency_target_pct": 50
+  }
+}
